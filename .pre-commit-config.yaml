@@ -28,3 +28,10 @@ repos:
         # Mirror the pyproject scope.
         files: ^(cyber_threat_pipeline|tests)/
         args: ["--config-file=pyproject.toml"]
+
+  # GitLeaks — secret scanning. Catches accidental API keys / credentials
+  # before they ever reach a commit. CI repeats the scan as a backstop.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks

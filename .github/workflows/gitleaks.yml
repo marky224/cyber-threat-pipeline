@@ -1,0 +1,36 @@
+name: gitleaks
+
+# Secret-scanning backstop. The pre-commit hook (gitleaks) catches local
+# mistakes; this job catches anything that lands in CI (including from
+# contributors who haven't installed pre-commit).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          # gitleaks scans the full history on push; PR scans cover the diff.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # Free on public repos and personal accounts; no license needed.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
