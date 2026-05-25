@@ -3,6 +3,12 @@ name: gitleaks
 # Secret-scanning backstop. The pre-commit hook (gitleaks) catches local
 # mistakes; this job catches anything that lands in CI (including from
 # contributors who haven't installed pre-commit).
+#
+# We invoke gitleaks directly rather than via gitleaks/gitleaks-action@v2
+# because the action computes a git-log range that breaks on the initial
+# push to a new repo (the root commit's parent doesn't exist). `gitleaks
+# dir` scans the working tree without a range and matches what runs locally
+# in pre-commit.
 
 on:
   push:
@@ -17,20 +23,26 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  GITLEAKS_VERSION: 8.21.2
+
 jobs:
   gitleaks:
     name: gitleaks
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout (full history)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          # gitleaks scans the full history on push; PR scans cover the diff.
-          fetch-depth: 0
 
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          # Free on public repos and personal accounts; no license needed.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan working tree
+        run: gitleaks dir --no-banner --verbose --redact .
