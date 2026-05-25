@@ -1,0 +1,72 @@
+# ----- Privacy boundary (must come first) -----
+# CLAUDE.md is local context for Claude Code only — never publish.
+/CLAUDE.md
+# All internal design docs, locked decisions, specs, and handoffs.
+/_private/
+# Claude Code harness state (per-machine, per-checkout).
+/.claude/
+
+# ----- Secrets -----
+.env
+.env.*
+!.env.example
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
+.python-version
+.venv/
+venv/
+
+# ----- Tooling caches -----
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ----- Build artifacts -----
+build/
+dist/
+
+# ----- dbt (transform/) -----
+transform/target/
+transform/logs/
+transform/dbt_packages/
+transform/.venv/
+transform/.user.yml
+profiles.yml
+
+# ----- Evidence (reporting/) -----
+reporting/build/
+reporting/.evidence/
+reporting/node_modules/
+reporting/.svelte-kit/
+
+# ----- Terraform (infra/) -----
+infra/.terraform/
+infra/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+
+# ----- Local data / scratch outputs -----
+data/
+*.csv
+
+# ----- Legacy artifacts (retired by Q11) -----
+pipeline_output.txt
+
+# ----- IDE / OS -----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
