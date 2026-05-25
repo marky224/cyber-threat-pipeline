@@ -1,0 +1,126 @@
+name: pipeline
+
+# Weekly OTX → Neon → dbt → analyst brief → Evidence deploy.
+# Manual `workflow_dispatch` mirrors the cron for ad-hoc runs.
+#
+# Per the locked decisions, this workflow IS the orchestration. Stages
+# invoke the top-level Makefile (single source of truth). Auth to AWS is
+# OIDC-only; the deploy IAM role + GitHub OIDC provider are Terraformed in
+# infra/ — see _private/specs/05-reporting-evidence.md and 07-orchestration.md.
+#
+# Phase-status legend mirrors the Makefile:
+#   [ready]    runs today.
+#   [phase N]  scaffolded; runs once the matching spec/code lands.
+
+on:
+  schedule:
+    # Mondays 13:00 UTC — early week, off-peak.
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+    inputs:
+      force_full_backfill:
+        description: "Skip the watermark and full-backfill ingest (TRUE/FALSE)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
+# OIDC + minimal read for checkout. No static AWS keys anywhere.
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  pipeline:
+    name: weekly run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      # -------------------------------------------------------------------
+      # Setup
+      # -------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync dev env (frozen)
+        run: uv sync --frozen
+
+      # -------------------------------------------------------------------
+      # AWS auth — OIDC, no static keys.
+      # The role-to-assume ARN comes from the deploy role Terraformed in
+      # infra/ (see _private/specs/05-reporting-evidence.md). Trust policy
+      # is scoped to this repo + main branch (and workflow_dispatch).
+      # -------------------------------------------------------------------
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: cyber-threat-pipeline-${{ github.run_id }}
+
+      # -------------------------------------------------------------------
+      # [phase 2] Ingest — OTX → Neon raw schema
+      # Reads NEON_DATABASE_URL + OTX_API_KEY. Inserts a pipeline_runs row
+      # at start, advances pipeline_state watermark on load success.
+      # -------------------------------------------------------------------
+      - name: Ingest (OTX → Neon)
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
+          FORCE_FULL_BACKFILL: ${{ inputs.force_full_backfill }}
+        run: make ingest
+
+      # -------------------------------------------------------------------
+      # [phase 3] Transform — dbt build (isolated transform/ env)
+      # Captures dbt test results into the current pipeline_runs row.
+      # -------------------------------------------------------------------
+      - name: dbt build (transform)
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: make transform
+
+      # -------------------------------------------------------------------
+      # [phase 4] Analyst brief — Grok + Claude, side by side
+      # Writes markdown into reporting/pages/ for the Evidence build.
+      # -------------------------------------------------------------------
+      - name: Analyst brief (Grok + Claude)
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+        run: make analysis
+
+      # -------------------------------------------------------------------
+      # [phase 5] Build + deploy Evidence site
+      # Evidence builds against Neon at build time (pooled connection).
+      # Deploy = aws s3 sync + CloudFront invalidation; bucket + dist id
+      # are outputs of the Terraform stack in infra/.
+      # -------------------------------------------------------------------
+      - name: Set up Node 20 (Evidence build)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: reporting/package-lock.json
+
+      - name: Build + deploy Evidence site
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          REPORT_BUCKET: ${{ secrets.REPORT_BUCKET }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: make report
