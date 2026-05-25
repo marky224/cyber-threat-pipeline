@@ -1,0 +1,94 @@
+[project]
+name = "cyber-threat-pipeline"
+version = "0.1.0"
+description = "AlienVault OTX → Neon Postgres → dbt → Evidence.dev (analytics) + Grafana Cloud (observability)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Mark Andrew Marquez", email = "me@markandrewmarquez.com" }]
+keywords = ["threat-intelligence", "otx", "etl", "dbt", "evidence", "grafana"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Private :: Do Not Upload",
+]
+# Runtime dependencies are intentionally empty here.
+# Per the locked decisions, they are added per phase via `uv add`, owned by
+# the matching spec in _private/specs/. dbt has its own isolated env under
+# transform/; Evidence (reporting/) is a Node project.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
+    "pytest>=8.3.0",
+    "pre-commit>=4.0.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cyber_threat_pipeline"]
+
+# ---------------------------------------------------------------------------
+# ruff — lint + format
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["transform", "reporting", "infra", "_private"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501", # line length handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ---------------------------------------------------------------------------
+# mypy — strict types
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+files = ["cyber_threat_pipeline", "tests"]
+# dbt/Evidence/Terraform dirs are not Python — skip them.
+exclude = "(transform/|reporting/|infra/)"
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+
+# ---------------------------------------------------------------------------
+# uv
+# ---------------------------------------------------------------------------
+[tool.uv]
+# Keep the lockfile reproducible across machines.
+managed = true
