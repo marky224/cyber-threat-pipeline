@@ -46,6 +46,8 @@ reporting/build/
 reporting/.evidence/
 reporting/node_modules/
 reporting/.svelte-kit/
+# Regenerated on every `make analysis` run — see cyber_threat_pipeline/analysis/.
+reporting/pages/analyst-brief.md
 
 # ----- Terraform (infra/) -----
 infra/.terraform/
