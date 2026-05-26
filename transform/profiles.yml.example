@@ -1,0 +1,21 @@
+# transform/profiles.yml.example
+#
+# Copy to transform/profiles.yml and fill in (or export the env vars).
+# profiles.yml is gitignored; this template is the public contract.
+#
+# The Neon pooled URL decomposes into host/user/password/db; dbt-postgres
+# takes them as discrete vars. In CI these come from the workflow env.
+
+cyber_threat_pipeline:
+  target: prod
+  outputs:
+    prod:
+      type: postgres
+      host: "{{ env_var('NEON_HOST') }}"
+      user: "{{ env_var('NEON_USER') }}"
+      password: "{{ env_var('NEON_PASSWORD') }}"
+      port: "{{ env_var('NEON_PORT', '5432') | int }}"
+      dbname: "{{ env_var('NEON_DB') }}"
+      schema: marts
+      threads: 4
+      sslmode: "{{ env_var('NEON_SSLMODE', 'require') }}"
