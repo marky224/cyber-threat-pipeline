@@ -69,3 +69,72 @@ jobs:
 
       - name: pytest
         run: uv run pytest
+
+  dbt:
+    name: dbt build · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Same pattern as the ci job: postgres:15 as a service so dbt can build
+    # against a freshly-seeded raw schema (no live Neon, no OTX hit).
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: x
+          POSTGRES_DB: ctp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # For the seed script (app env, psycopg).
+      NEON_DATABASE_URL: postgresql://postgres:x@localhost:5432/ctp
+      # For dbt-postgres (transform env, profiles.yml.example reads these).
+      NEON_HOST: localhost
+      NEON_PORT: "5432"
+      NEON_USER: postgres
+      NEON_PASSWORD: x
+      NEON_DB: ctp
+      NEON_SSLMODE: disable
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            transform/uv.lock
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Apply sql/ DDL
+        run: |
+          psql "postgresql://postgres:x@localhost:5432/ctp" \
+            -v ON_ERROR_STOP=1 \
+            -f sql/00_schemas.sql \
+            -f sql/10_raw.sql \
+            -f sql/20_pipeline.sql \
+            -f sql/30_grafana_role.sql
+
+      - name: Sync app env (frozen) + seed fixture corpus
+        run: |
+          uv sync --frozen
+          uv run python -m scripts.seed_fixture_corpus
+
+      - name: dbt build (isolated transform env)
+        run: |
+          cp transform/profiles.yml.example transform/profiles.yml
+          make -C transform build
+
+      - name: dbt docs generate (smoke-check the lineage graph)
+        run: make -C transform docs
