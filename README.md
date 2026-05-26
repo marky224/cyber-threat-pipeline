@@ -62,7 +62,17 @@ docs/                    Public assets (architecture diagrams, etc.)
 
 ## Status
 
-**Scaffolding phase.** The repository structure, tooling, and CI are in place; the per-phase implementations (`sql/` → `ingestion/` → `transform/` → `analysis/` → `reporting/` + `infra/` → `monitoring/`) land in dedicated build phases. This README is fleshed out as each phase ships.
+Build in progress, shipped in dedicated phases (`sql/` → `ingestion/` → `transform/` → `analysis/` → `reporting/` + `infra/` → `monitoring/`). This README is fleshed out as each phase lands.
+
+| Phase | Component | Status |
+|---|---|---|
+| 1 | `sql/` — schemas, raw + pipeline tables, `grafana_ro` role | ✅ shipped |
+| 2 | `cyber_threat_pipeline/{core,ingestion}/` — OTX → Neon raw | ✅ shipped |
+| 3 | `transform/` — dbt Core project (9 marts) | next |
+| 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief | pending |
+| 5 | `reporting/` + `infra/` — Evidence + Terraform | pending |
+| 6 | `monitoring/` — Grafana dashboards + alerts | pending |
+| 7 | `.github/workflows/` orchestration polish | pending |
 
 ## Local development
 
