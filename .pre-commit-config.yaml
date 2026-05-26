@@ -21,10 +21,22 @@ repos:
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
+    # Pin to the same minor as the project's mypy (uv lock → 2.1.0). The
+    # v1.14.1 mirror predates mypy 2.x's import-not-found / import-untyped
+    # error-code split and reports false positives against this codebase.
+    rev: v2.1.0
     hooks:
       - id: mypy
-        additional_dependencies: []
+        # pydantic.mypy plugin is enabled in pyproject.toml; without these
+        # the isolated mypy env can't import the plugin or resolve the
+        # runtime symbols that strict-mode mypy inspects.
+        additional_dependencies:
+          - "pydantic>=2"
+          - "pydantic-settings>=2.14.1"
+          - "psycopg[binary]>=3.3.4"
+          - "pytest>=8.3.0"
+          - "OTXv2>=1.5,<2"
+          - "types-requests"
         # Mirror the pyproject scope.
         files: ^(cyber_threat_pipeline|tests)/
         args: ["--config-file=pyproject.toml"]
