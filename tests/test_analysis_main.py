@@ -181,11 +181,13 @@ def test_prompt_is_round_tripped_in_details(
     content = output_page.read_text(encoding="utf-8")
     assert "<details>" in content
     # The prompt the model received is the same one rendered in the details
-    # block (byte-identical).
+    # block (byte-identical). The opening fence is tagged ```code so the
+    # block isn't parsed as a SQL query by Evidence's preprocessor.
     sent = seen[0]
-    fence_start = content.index("```", content.index("<details>"))
-    fence_end = content.index("```", fence_start + 3)
-    rendered = content[fence_start + 3 : fence_end].strip("\n")
+    open_fence = "```code\n"
+    fence_start = content.index(open_fence, content.index("<details>"))
+    fence_end = content.index("```", fence_start + len(open_fence))
+    rendered = content[fence_start + len(open_fence) : fence_end].strip("\n")
     assert rendered == sent.strip("\n")
 
 
