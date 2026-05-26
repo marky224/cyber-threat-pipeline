@@ -1,0 +1,7 @@
+name: neon
+type: postgres
+# All connection options come from env vars at build time:
+#   EVIDENCE_SOURCE__neon__connectionString=postgresql://<user>:<pw>@<host>:<port>/<db>?sslmode=require
+# Production uses the Neon pooled URL; local verify uses a docker localhost URL.
+# We don't list options here so this file never carries secrets.
+options: {}
