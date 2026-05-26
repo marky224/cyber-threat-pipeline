@@ -1,0 +1,39 @@
+version: 2
+
+sources:
+  - name: raw
+    database: "{{ env_var('NEON_DB') }}"
+    schema: raw
+    tables:
+      - name: pulses
+        description: "OTX pulses. Upserted by cyber_threat_pipeline.ingestion. Audit columns: first_seen_at, synced_at."
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: modified
+            description: "OTX watermark field. Drives pipeline.state."
+          - name: synced_at
+            description: "Rewritten on every upsert. Cursor for stg_otx__indicators."
+        loaded_at_field: synced_at
+        freshness:
+          warn_after:  { count: 8,  period: day }
+          error_after: { count: 14, period: day }
+
+      - name: indicators
+        description: "OTX indicators. FK pulse_id → pulses.id."
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: pulse_id
+            tests:
+              - relationships:
+                  arguments:
+                    to: source('raw', 'pulses')
+                    field: id
+
+  - name: pipeline
+    database: "{{ env_var('NEON_DB') }}"
+    schema: pipeline
+    tables:
+      - name: runs
+        description: "Append-only run audit. Used by mart_data_quality."
