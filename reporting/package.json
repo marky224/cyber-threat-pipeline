@@ -1,0 +1,16 @@
+{
+  "name": "cyber-threat-pipeline-reporting",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "evidence dev",
+    "build": "evidence build",
+    "sources": "evidence sources"
+  },
+  "devDependencies": {
+    "@evidence-dev/core-components": "^5",
+    "@evidence-dev/evidence": "^40",
+    "@evidence-dev/postgres": "^1",
+    "@evidence-dev/tailwind": "^3"
+  }
+}
