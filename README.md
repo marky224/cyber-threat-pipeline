@@ -41,7 +41,7 @@ The litmus test: *is this about what the data **means** (→ Evidence) or about 
 | Transformation | dbt Core (Postgres adapter) |
 | Reporting | Evidence.dev → S3 + CloudFront (us-east-1) |
 | Monitoring | Grafana Cloud (free tier) |
-| Analyst brief | Grok (xAI) + Claude (Anthropic), side-by-side two-model comparison |
+| Analyst brief | Swappable LLM providers (Claude · Grok · GPT · Gemini · local Ollama), side-by-side two-model comparison |
 | Orchestration | GitHub Actions (weekly cron + dispatch), `Makefile` as single source of truth |
 | Infra | Terraform (S3 + OAC + CloudFront + ACM + Route 53 + GitHub OIDC role) |
 | Lint / types / tests | ruff · mypy · pytest · pre-commit |
@@ -69,8 +69,8 @@ Build in progress, shipped in dedicated phases (`sql/` → `ingestion/` → `tra
 | 1 | `sql/` — schemas, raw + pipeline tables, `grafana_ro` role | ✅ shipped |
 | 2 | `cyber_threat_pipeline/{core,ingestion}/` — OTX → Neon raw | ✅ shipped |
 | 3 | `transform/` — dbt Core project (9 marts, isolated dbt env) | ✅ shipped |
-| 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief (Grok + Claude) | next |
-| 5 | `reporting/` + `infra/` — Evidence + Terraform | pending |
+| 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief (5 swappable providers) | ✅ shipped |
+| 5 | `reporting/` + `infra/` — Evidence + Terraform | next |
 | 6 | `monitoring/` — Grafana dashboards + alerts | pending |
 | 7 | `.github/workflows/` orchestration polish | pending |
 
