@@ -21,6 +21,27 @@ jobs:
     name: lint · typecheck · test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    # Postgres service for the phase-2 DB-integration tests
+    # (tests/test_load.py, tests/test_runs.py). Skipped automatically
+    # if NEON_DATABASE_URL is unset; here we set it.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: x
+          POSTGRES_DB: ctp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NEON_DATABASE_URL: postgresql://postgres:x@localhost:5432/ctp
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
