@@ -37,6 +37,8 @@ repos:
           - "pytest>=8.3.0"
           - "OTXv2>=1.5,<2"
           - "types-requests"
+          - "anthropic"
+          - "openai"
         # Mirror the pyproject scope.
         files: ^(cyber_threat_pipeline|tests)/
         args: ["--config-file=pyproject.toml"]

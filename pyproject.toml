@@ -18,10 +18,13 @@ classifiers = [
 # the matching spec in _private/specs/. dbt has its own isolated env under
 # transform/; Evidence (reporting/) is a Node project.
 dependencies = [
+    "anthropic>=0.104.1",
+    "openai>=2.38.0",
     "otxv2>=1.5,<2",
     "pandas>=3.0.3",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.1",
+    "requests>=2.34.2",
 ]
 
 [dependency-groups]
