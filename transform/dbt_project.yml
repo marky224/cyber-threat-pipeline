@@ -1,0 +1,30 @@
+name: cyber_threat_pipeline
+version: "0.1.0"
+profile: cyber_threat_pipeline
+require-dbt-version: [">=1.9.0", "<2.0.0"]
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  cyber_threat_pipeline:
+    +materialized: view
+    staging:
+      +schema: marts
+      stg_otx__indicators:
+        +materialized: incremental
+        +incremental_strategy: merge
+        +unique_key: id
+        +on_schema_change: append_new_columns
+    intermediate:
+      +schema: marts
+    marts:
+      +schema: marts
+      +materialized: table
+      # Re-applied on every dbt build so grafana_ro survives drop+recreate
+      # materialization churn (Q10).
+      +grants:
+        select: ["grafana_ro"]
