@@ -138,3 +138,125 @@ jobs:
 
       - name: dbt docs generate (smoke-check the lineage graph)
         run: make -C transform docs
+
+  evidence:
+    name: evidence · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Mirrors the dbt job's setup so the Evidence build sees a populated
+    # marts schema, then adds `npm ci`/`npm run sources`/`npm run build`
+    # + a secret-grep on the build output (spec 05 §7).
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: x
+          POSTGRES_DB: ctp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NEON_DATABASE_URL: postgresql://postgres:x@localhost:5432/ctp
+      NEON_HOST: localhost
+      NEON_PORT: "5432"
+      NEON_USER: postgres
+      NEON_PASSWORD: x
+      NEON_DB: ctp
+      NEON_SSLMODE: disable
+      # Evidence: single connection URL drives the `neon` source.
+      EVIDENCE_SOURCE__neon__connectionString: postgresql://postgres:x@localhost:5432/ctp?sslmode=disable
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            transform/uv.lock
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: reporting/package-lock.json
+
+      - name: Apply sql/ DDL
+        run: |
+          psql "postgresql://postgres:x@localhost:5432/ctp" \
+            -v ON_ERROR_STOP=1 \
+            -f sql/00_schemas.sql \
+            -f sql/10_raw.sql \
+            -f sql/20_pipeline.sql \
+            -f sql/30_grafana_role.sql
+
+      - name: Sync app env (frozen) + seed fixture corpus
+        run: |
+          uv sync --frozen
+          uv run python -m scripts.seed_fixture_corpus
+
+      - name: dbt build (isolated transform env)
+        run: |
+          cp transform/profiles.yml.example transform/profiles.yml
+          make -C transform build
+
+      # Phase 4 writes reporting/pages/analyst-brief.md on every `make
+      # analysis`. The file is gitignored, so the CI checkout never has
+      # it; we synthesize it here with a mocked local provider so the
+      # Evidence build can render the analyst-brief route (spec 05 §1).
+      - name: Generate analyst-brief.md (mocked provider)
+        env:
+          OTX_API_KEY: dummy
+        run: |
+          uv run python -c "
+          from cyber_threat_pipeline.analysis import providers
+          o = providers.PROVIDERS['local']
+          providers.PROVIDERS['local'] = providers.Provider(
+              name=o.name,
+              query=lambda *a, **kw: '## Headline\nCI-mocked brief.',
+              default_model=o.default_model,
+              credential_kind=o.credential_kind,
+              credential_attr=o.credential_attr,
+              display_label=o.display_label,
+          )
+          from cyber_threat_pipeline.analysis import __main__ as m
+          m.run()
+          "
+
+      - name: Evidence — install deps
+        working-directory: reporting
+        run: npm ci
+
+      - name: Evidence — materialize SQL sources
+        working-directory: reporting
+        run: npm run sources
+
+      - name: Evidence — static build
+        working-directory: reporting
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          test -f reporting/build/index.html
+          test -f reporting/build/freshness/index.html
+          test -f reporting/build/analyst-brief/index.html
+
+      - name: Secret-grep build/ (spec 05 §7)
+        run: |
+          if grep -rIEn '(password=|NEON_DATABASE_URL|postgresql://[^"]*:[^"@]+@|postgres:x|sk-[a-zA-Z0-9]{20}|xai-[a-zA-Z0-9]{20})' reporting/build/; then
+            echo "::error::Secret-like string found in reporting/build/"
+            exit 1
+          fi
