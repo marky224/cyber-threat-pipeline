@@ -17,7 +17,12 @@ classifiers = [
 # Per the locked decisions, they are added per phase via `uv add`, owned by
 # the matching spec in _private/specs/. dbt has its own isolated env under
 # transform/; Evidence (reporting/) is a Node project.
-dependencies = []
+dependencies = [
+    "otxv2>=1.5,<2",
+    "pandas>=3.0.3",
+    "psycopg[binary]>=3.3.4",
+    "pydantic-settings>=2.14.1",
+]
 
 [dependency-groups]
 dev = [
@@ -74,6 +79,7 @@ strict = true
 warn_unreachable = true
 warn_unused_ignores = true
 files = ["cyber_threat_pipeline", "tests"]
+plugins = ["pydantic.mypy"]
 # dbt/Evidence/Terraform dirs are not Python — skip them.
 exclude = "(transform/|reporting/|infra/)"
 
