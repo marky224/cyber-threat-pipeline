@@ -68,8 +68,8 @@ Build in progress, shipped in dedicated phases (`sql/` → `ingestion/` → `tra
 |---|---|---|
 | 1 | `sql/` — schemas, raw + pipeline tables, `grafana_ro` role | ✅ shipped |
 | 2 | `cyber_threat_pipeline/{core,ingestion}/` — OTX → Neon raw | ✅ shipped |
-| 3 | `transform/` — dbt Core project (9 marts) | next |
-| 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief | pending |
+| 3 | `transform/` — dbt Core project (9 marts, isolated dbt env) | ✅ shipped |
+| 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief (Grok + Claude) | next |
 | 5 | `reporting/` + `infra/` — Evidence + Terraform | pending |
 | 6 | `monitoring/` — Grafana dashboards + alerts | pending |
 | 7 | `.github/workflows/` orchestration polish | pending |
