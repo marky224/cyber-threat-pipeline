@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: stg_otx__pulses
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: tlp
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['white', 'green', 'amber', 'red']
+                quote: true
+
+  - name: stg_otx__indicators
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: pulse_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_otx__pulses')
+                field: id
+      - name: type
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - 'FileHash-SHA256'
+                  - 'FileHash-SHA1'
+                  - 'FileHash-MD5'
+                  - 'domain'
+                  - 'hostname'
+                  - 'URL'
+                  - 'IPv4'
+                  - 'IPv6'
+                  - 'email'
+                  - 'CIDR'
+                  - 'FilePath'
+                  - 'CVE'
+                  - 'Mutex'
+                  - 'YARA'
+                quote: true
+              config:
+                severity: warn

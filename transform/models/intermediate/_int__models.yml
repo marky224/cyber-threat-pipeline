@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: int_pulse_country
+    description: "One row per (pulse, country) — unnest of pulses.targeted_countries."
+    columns:
+      - name: pulse_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_otx__pulses')
+                field: id
+      - name: country
+        tests: [not_null]
+
+  - name: int_pulse_tag
+    description: "One row per (pulse, tag) — unnest of pulses.tags."
+    columns:
+      - name: pulse_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_otx__pulses')
+                field: id
+      - name: tag
+        tests: [not_null]
+
+  - name: int_pulse_industry
+    description: "One row per (pulse, industry) — unnest of pulses.industries."
+    columns:
+      - name: pulse_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_otx__pulses')
+                field: id
+      - name: industry
+        tests: [not_null]
