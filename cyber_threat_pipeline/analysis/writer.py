@@ -101,8 +101,6 @@ def render_markdown(
 ---
 title: Analyst Brief
 description: "Two-model brief on this week's emerging threats."
-queries:
-  brief_input: select * from brief_input
 ---
 
 # Analyst Brief — {generated_at:%Y-%m-%d}
@@ -116,7 +114,7 @@ queries:
 <details>
 <summary>Show the prompt sent to every model</summary>
 
-```
+```code
 {prompt}
 ```
 

@@ -78,7 +78,7 @@ def test_render_dedupes_keeps_different_models_of_same_provider() -> None:
     assert "qwen body" in md
 
 
-def test_render_includes_frontmatter_and_query() -> None:
+def test_render_includes_frontmatter() -> None:
     md = render_markdown(
         generated_at=_GENERATED_AT,
         prompt=_PROMPT,
@@ -86,8 +86,10 @@ def test_render_includes_frontmatter_and_query() -> None:
     )
     assert md.startswith("---\n")
     assert "title: Analyst Brief" in md
-    assert "queries:" in md
-    assert "brief_input: select * from brief_input" in md
+    assert "description:" in md
+    # The body is pure narrative — no `queries:` frontmatter (Evidence v40's
+    # external-queries syntax accepts .sql file paths only, not raw SQL).
+    assert "queries:" not in md
 
 
 def test_render_round_trips_prompt_byte_for_byte_in_details() -> None:
@@ -98,11 +100,16 @@ def test_render_round_trips_prompt_byte_for_byte_in_details() -> None:
         results=[_result("local", "llama3.1")],
     )
     # The prompt sits between fenced backticks inside a <details> block.
+    # The opening fence is tagged ```code so Evidence's preprocessor renders
+    # it as a generic code block (the `code` lang is in Evidence's
+    # supportedLangs list — see preprocess/utils/supportedLanguages.cjs)
+    # rather than trying to parse the prompt as a SQL query.
     assert "<details>" in md
     assert "</details>" in md
-    fence_start = md.index("```", md.index("<details>"))
-    fence_end = md.index("```", fence_start + 3)
-    body = md[fence_start + 3 : fence_end].strip("\n")
+    open_fence = "```code\n"
+    fence_start = md.index(open_fence, md.index("<details>"))
+    fence_end = md.index("```", fence_start + len(open_fence))
+    body = md[fence_start + len(open_fence) : fence_end].strip("\n")
     assert body == prompt.strip("\n")
 
 
