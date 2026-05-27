@@ -308,7 +308,12 @@ jobs:
           import yaml
           d = yaml.safe_load(open('monitoring/datasource.example.yaml'))
           assert d['apiVersion'] == 1, 'datasource.example.yaml: apiVersion != 1'
-          assert d['datasources'][0]['type'] == 'postgres', 'datasource type != postgres'
+          # Accept the legacy plugin id ('postgres') and the modern rebrand
+          # ('grafana-postgresql-datasource', shipped in Grafana 10.2.3+).
+          # The template ships with the modern id; the legacy form still
+          # resolves on older self-hosted Grafana installs.
+          ds_type = d['datasources'][0]['type']
+          assert ds_type in ('postgres', 'grafana-postgresql-datasource'), f'datasource type unexpected: {ds_type!r}'
           print('OK datasource.example.yaml')
           "
 
