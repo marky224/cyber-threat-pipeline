@@ -3,14 +3,23 @@
 Spec: _private/specs/04-analysis-llm.md §6, extended to N swappable providers.
 
 Steps:
-  1. Resolve the two configured provider slots from Settings
-     (``ANALYSIS_PRIMARY_PROVIDER`` / ``ANALYSIS_SECONDARY_PROVIDER``).
-  2. Fail fast if a selected slot needs a credential we don't have — that's
-     a config error, not a runtime one (spec §8.4).
+  1. Resolve the configured provider list from Settings.provider_slots()
+     (``ANALYSIS_PROVIDERS`` comma-separated list, or legacy
+     ``ANALYSIS_PRIMARY_PROVIDER`` / ``ANALYSIS_SECONDARY_PROVIDER``).
+  2. Fail fast if any selected slot needs a credential we don't have —
+     that's a config error, not a runtime one (spec §8.4).
   3. Fetch ``marts.brief_input`` and build the prompt deterministically.
   4. Run each provider; per-provider exceptions render a visible-failure
      placeholder so the page is degraded, not silently fictional (§4.3 / §8.5).
   5. Write ``reporting/pages/analyst-brief.md``.
+
+The model id sent to each cloud provider is pinned in code (claude.py
+``DEFAULT_MODEL`` and grok.py ``DEFAULT_MODEL``) and forwarded to the
+provider's API in the request body — Anthropic and xAI do NOT auto-select
+a model on the backend; the field is required and the API would return
+HTTP 400 if it were omitted. Operators can override via ``CLAUDE_MODEL``
+/ ``GROK_MODEL`` / ``LOCAL_MODEL`` env vars; the model that was actually
+used is logged on each call below so the run audit trail records it.
 
 This step does NOT open its own ``pipeline.runs`` row in v1. The orchestration
 phase (spec 07) wraps ingest → transform → analysis in one run row.
@@ -58,6 +67,11 @@ def _resolve_credential(provider: Provider, cfg: Settings) -> str:
 
 def _run_provider(provider: Provider, credential: str, prompt_str: str) -> writer.ProviderResult:
     """Call one provider; render a placeholder on failure (per §4.3)."""
+    logger.info(
+        "Provider %s: sending prompt to model %r (no backend auto-selection)",
+        provider.name,
+        provider.default_model,
+    )
     try:
         if provider.credential_kind == "api_key":
             text = provider.query(prompt_str, api_key=credential)
@@ -78,14 +92,18 @@ def run(cfg: Settings | None = None) -> int:
     """Build and write the analyst brief. Returns a process exit code."""
     cfg = cfg or Settings()
 
-    primary = providers_mod.resolve(cfg.analysis_primary_provider)
-    secondary = providers_mod.resolve(cfg.analysis_secondary_provider)
+    slot_names = cfg.provider_slots()
+    slots = [providers_mod.resolve(name) for name in slot_names]
+    logger.info(
+        "Analyst-brief slots: %s",
+        ", ".join(f"{p.name}({p.default_model})" for p in slots),
+    )
 
     # Resolve credentials BEFORE opening any connection or hitting any API.
     # If a selected slot is misconfigured, we surface it as a clear startup
     # error rather than a half-built page.
     creds: dict[str, str] = {}
-    for p in (primary, secondary):
+    for p in slots:
         if p.name not in creds:
             creds[p.name] = _resolve_credential(p, cfg)
 
@@ -94,10 +112,7 @@ def run(cfg: Settings | None = None) -> int:
         brief = prompt_mod.fetch_brief_input(conn)
         prompt_str = prompt_mod.build_prompt(brief)
 
-        results = [
-            _run_provider(primary, creds[primary.name], prompt_str),
-            _run_provider(secondary, creds[secondary.name], prompt_str),
-        ]
+        results = [_run_provider(p, creds[p.name], prompt_str) for p in slots]
 
         path = writer.write_brief(
             generated_at=datetime.now(UTC),

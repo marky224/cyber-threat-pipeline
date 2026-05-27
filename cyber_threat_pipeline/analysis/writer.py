@@ -57,15 +57,18 @@ def _render_provider_block(r: ProviderResult) -> str:
 def _render_body(results: list[ProviderResult]) -> str:
     if len(results) == 1:
         return _render_provider_block(results[0])
-    parts = ["<Tabs>"]
-    for r in results:
-        parts.append(f'  <Tab label="{r.label} — {r.model}">')
-        parts.append("")
-        parts.append(r.text.rstrip())
-        parts.append("")
-        parts.append("  </Tab>")
-    parts.append("</Tabs>")
-    return "\n".join(parts)
+    # Stacked render: one provider block after another, separated by
+    # horizontal rules.
+    #
+    # Previously rendered as Evidence <Tabs>/<Tab>, but Evidence's Svelte
+    # markdown preprocessor doesn't reliably nest multi-paragraph markdown
+    # (especially trailing bullet lists) inside <Tab> — the Tab.svelte
+    # children fail to register with the parent context and the tab bar
+    # renders empty, or the build fails with "</li> closes element that
+    # was not open". Stacked layout side-steps the structural problem
+    # AND makes all providers visible without a click, which is the
+    # right default for a portfolio-facing page anyway.
+    return "\n\n---\n\n".join(_render_provider_block(r) for r in results)
 
 
 def render_markdown(
