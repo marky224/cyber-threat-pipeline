@@ -261,6 +261,57 @@ jobs:
             exit 1
           fi
 
+  monitoring:
+    name: monitoring · validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    # YAML + JSON syntactic check only. Doesn't verify Grafana semantics
+    # (panel rendering, alert eval against live data) — those are operator-
+    # side checks against the actual Grafana Cloud tenant.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate dashboard.json (json.load)
+        run: |
+          python -c "
+          import json
+          d = json.load(open('monitoring/dashboard.json'))
+          assert d['title'], 'dashboard.json missing title'
+          assert d['panels'], 'dashboard.json has no panels'
+          print(f'OK dashboard.json — {len(d[\"panels\"])} panels')
+          "
+
+      - name: Validate alerts.yaml (yaml.safe_load)
+        run: |
+          python -c "
+          import yaml
+          d = yaml.safe_load(open('monitoring/alerts.yaml'))
+          assert d['apiVersion'] == 1, 'alerts.yaml: apiVersion != 1'
+          rules = d['groups'][0]['rules']
+          assert len(rules) == 4, f'alerts.yaml: expected 4 rules, got {len(rules)}'
+          print(f'OK alerts.yaml — {len(rules)} rules')
+          "
+
+      - name: Validate datasource.example.yaml (yaml.safe_load)
+        run: |
+          python -c "
+          import yaml
+          d = yaml.safe_load(open('monitoring/datasource.example.yaml'))
+          assert d['apiVersion'] == 1, 'datasource.example.yaml: apiVersion != 1'
+          assert d['datasources'][0]['type'] == 'postgres', 'datasource type != postgres'
+          print('OK datasource.example.yaml')
+          "
+
   terraform:
     name: terraform · validate
     runs-on: ubuntu-latest
