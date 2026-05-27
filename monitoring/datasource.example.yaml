@@ -20,9 +20,15 @@ apiVersion: 1
 
 datasources:
   - name: neon_ro
-    type: postgres
+    # `grafana-postgresql-datasource` is the modern plugin id (rebranded
+    # from the legacy `postgres` in Grafana 10.2.3). Use the new id —
+    # the legacy form still works for healthchecks/listing but the new
+    # plugin's query path rejects queries until `database` is also set
+    # under jsonData (see below).
+    type: grafana-postgresql-datasource
     access: proxy
     url: <neon-pooled-host>:5432
+    # Legacy location (still read by the SDK; harmless to keep).
     database: <neon-db-name>
     user: grafana_login
     secureJsonData:
@@ -31,3 +37,8 @@ datasources:
       sslmode: require
       timescaledb: false
       postgresVersion: 1500
+      # REQUIRED for the new `grafana-postgresql-datasource` plugin. The
+      # frontend's SqlDatasource fails queries with "you do not currently
+      # have a default database configured" if this is missing — even
+      # though the legacy top-level `database` field is set above.
+      database: <neon-db-name>
