@@ -32,6 +32,12 @@ Orchestrated by a single weekly **GitHub Actions** cron (plus manual dispatch); 
 
 Both surfaces are refreshed every Monday by the weekly cron in `.github/workflows/pipeline.yml`.
 
+### Evidence site preview
+
+| Home — corpus overview | Analyst Brief — LLM-generated | Freshness & Data Quality |
+|---|---|---|
+| [![Home](docs/screenshots/evidence-home.png)](https://cyber-intel.markandrewmarquez.com/) | [![Analyst Brief](docs/screenshots/evidence-analyst-brief.png)](https://cyber-intel.markandrewmarquez.com/analyst-brief) | [![Freshness](docs/screenshots/evidence-freshness.png)](https://cyber-intel.markandrewmarquez.com/freshness) |
+
 ## The Evidence / Grafana split
 
 These two surfaces are deliberately separated:
