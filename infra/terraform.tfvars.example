@@ -1,0 +1,21 @@
+# Public template — copy to terraform.tfvars (which is gitignored) and
+# adjust if you need any non-default value. Defaults match this project;
+# anyone forking the repo into a different account/repo/domain should
+# override at minimum `github_repo` and `site_domain`.
+
+# Prefix for S3 bucket + IAM resource names.
+# project_name = "cyber-threat-pipeline"
+
+# Public hostname the Evidence site is served from.
+# Must already have a Route 53 hosted zone for its parent domain in
+# this AWS account (the apex zone is looked up in main.tf).
+# site_domain = "cyber-intel.markandrewmarquez.com"
+
+# GitHub repo authorized to assume the deploy role via OIDC.
+# <owner>/<repo>; scopes the trust policy.
+# github_repo = "marky224/cyber-threat-pipeline"
+
+# Branch the OIDC trust policy permits. Pull requests cannot assume the
+# role regardless of this value (their `sub` claim is `pull_request:`,
+# which doesn't match the trust pattern).
+# deploy_branch = "main"
