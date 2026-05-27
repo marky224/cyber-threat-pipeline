@@ -97,7 +97,10 @@ analysis:
 # AWS_PROFILE locally).
 .PHONY: report
 report:
-	cd reporting && npm ci && npm run build
+	# Subshell so .ONESHELL doesn't leak `cd reporting` into the
+	# following aws lines (which would resolve `reporting/build/` to
+	# `reporting/reporting/build/` and fail with "path does not exist").
+	(cd reporting && npm ci && npm run build)
 	aws s3 sync reporting/build/ "s3://$$REPORT_BUCKET/" --delete
 	aws cloudfront create-invalidation \
 		--distribution-id "$$CLOUDFRONT_DISTRIBUTION_ID" \

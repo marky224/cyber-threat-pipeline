@@ -11,21 +11,14 @@
 
 # GitHub Actions OIDC provider (account-global; one per AWS account).
 #
-# The thumbprint is required by Terraform but is no longer validated by
-# AWS — STS verifies the JWT's signature against GitHub's JWKS at
-# runtime, not against this thumbprint. We pin GitHub's published
-# thumbprint as documentation; if GitHub rotates the cert (rare), this
-# can stay as-is and auth keeps working.
-resource "aws_iam_openid_connect_provider" "github" {
-  url            = "https://token.actions.githubusercontent.com"
-  client_id_list = ["sts.amazonaws.com"]
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1",
-  ]
-
-  tags = {
-    Project = var.project_name
-  }
+# We look this up as a data source rather than creating it, so other
+# projects in the same AWS account that share the OIDC provider keep
+# working. AWS only permits one `token.actions.githubusercontent.com`
+# provider per account; STS verifies the JWT's signature against
+# GitHub's JWKS at runtime, so the per-provider thumbprint is no
+# longer load-bearing — any project's provider works for any other.
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 # Trust policy: only this repo + this branch (and the matching
@@ -39,7 +32,7 @@ data "aws_iam_policy_document" "deploy_assume" {
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
     }
 
     condition {
