@@ -70,8 +70,8 @@ Build in progress, shipped in dedicated phases (`sql/` → `ingestion/` → `tra
 | 2 | `cyber_threat_pipeline/{core,ingestion}/` — OTX → Neon raw | ✅ shipped |
 | 3 | `transform/` — dbt Core project (9 marts, isolated dbt env) | ✅ shipped |
 | 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief (5 swappable providers) | ✅ shipped |
-| 5 | `reporting/` + `infra/` — Evidence + Terraform | next |
-| 6 | `monitoring/` — Grafana dashboards + alerts | pending |
+| 5 | `reporting/` + `infra/` — Evidence (Node 20, postgres datasource, 3 pages) + Terraform (S3 + CloudFront + ACM + Route 53 + GitHub OIDC + deploy role) | ✅ shipped |
+| 6 | `monitoring/` — Grafana dashboards + alerts | next |
 | 7 | `.github/workflows/` orchestration polish | pending |
 
 ## Local development
