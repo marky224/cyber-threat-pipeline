@@ -173,6 +173,11 @@ jobs:
       - name: Analyst brief
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          # OTX_API_KEY is required by Settings() at construction even
+          # though the analysis stage doesn't hit OTX — Settings validates
+          # all fields up-front (core/config.py marks OTX_API_KEY as
+          # required for the ingestion path).
+          OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
           ANALYSIS_PROVIDERS: ${{ vars.ANALYSIS_PROVIDERS || 'claude' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
