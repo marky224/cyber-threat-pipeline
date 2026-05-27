@@ -23,6 +23,15 @@ Grafana Cloud (monitoring/)                         Evidence.dev (reporting/)
 
 Orchestrated by a single weekly **GitHub Actions** cron (plus manual dispatch); a separate CI workflow runs lint, type-check, and tests on every push.
 
+## Live
+
+| Surface | URL |
+|---|---|
+| **Evidence.dev analytical site** | <https://cyber-intel.markandrewmarquez.com/> |
+| **Grafana operational dashboard** (public share) | <https://mec104e.grafana.net/public-dashboards/c5f4b57d91aa4e2395a4899fc74dc55f> |
+
+Both surfaces are refreshed every Monday by the weekly cron in `.github/workflows/pipeline.yml`.
+
 ## The Evidence / Grafana split
 
 These two surfaces are deliberately separated:
@@ -71,8 +80,8 @@ Build in progress, shipped in dedicated phases (`sql/` → `ingestion/` → `tra
 | 3 | `transform/` — dbt Core project (9 marts, isolated dbt env) | ✅ shipped |
 | 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief (5 swappable providers) | ✅ shipped |
 | 5 | `reporting/` + `infra/` — Evidence (Node 20, postgres datasource, 3 pages) + Terraform (S3 + CloudFront + ACM + Route 53 + GitHub OIDC + deploy role) | ✅ shipped |
-| 6 | `monitoring/` — Grafana dashboards + alerts | next |
-| 7 | `.github/workflows/` orchestration polish | pending |
+| 6 | `monitoring/` — Grafana dashboards + alerts as code (5 panels, 4 alerts, JSON+YAML, no UI state) | ✅ shipped |
+| 7 | `.github/workflows/` orchestration polish + Makefile final wiring | next |
 
 ## Local development
 
