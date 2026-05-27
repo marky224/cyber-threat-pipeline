@@ -1,0 +1,33 @@
+# Grafana datasource provisioning template — Postgres (read-only Neon).
+#
+# This file is COMMITTED to the repo as a template; the real datasource is
+# provisioned into Grafana Cloud either via the API or by pasting this
+# template into the tenant's "Data sources → Add → Postgres" form. The
+# secret (password for grafana_login) lives in Grafana Cloud's secret store
+# and never lands in this file.
+#
+# Operator checklist (also in README.md §1):
+#   1. Create the `grafana_login` Postgres user out-of-band against Neon:
+#        CREATE USER grafana_login WITH PASSWORD '<generated>' IN ROLE grafana_ro;
+#      (the `grafana_ro` GROUP role is created by sql/30_grafana_role.sql).
+#   2. Capture the Neon pooled host + DB name; replace placeholders below.
+#   3. Paste the generated password into Grafana Cloud's secret field — NOT
+#      this file.
+#   4. Adjust `postgresVersion` to match Neon's reported version at build
+#      time (Grafana uses this to enable version-appropriate query helpers).
+
+apiVersion: 1
+
+datasources:
+  - name: neon_ro
+    type: postgres
+    access: proxy
+    url: <neon-pooled-host>:5432
+    database: <neon-db-name>
+    user: grafana_login
+    secureJsonData:
+      password: <managed-in-grafana-cloud>
+    jsonData:
+      sslmode: require
+      timescaledb: false
+      postgresVersion: 1500
