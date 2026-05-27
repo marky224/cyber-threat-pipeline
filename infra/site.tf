@@ -116,6 +116,39 @@ resource "aws_cloudfront_origin_access_control" "site" {
   signing_protocol                  = "sigv4"
 }
 
+# Rewrites bare sub-paths to their /index.html so per-route static
+# files resolve correctly. Evidence (and most static site generators)
+# emit pages at `<route>/index.html`, but a request for `/<route>`
+# without the suffix hits S3, which doesn't auto-rewrite — S3 returns
+# 404 and the CloudFront error-response below falls back to the home
+# page. With this function the URI is rewritten BEFORE S3 sees it.
+#
+# Rules:
+#   /                       →  /index.html (already handled by default_root_object)
+#   /freshness              →  /freshness/index.html
+#   /analyst-brief          →  /analyst-brief/index.html
+#   /freshness/             →  /freshness/index.html
+#   /_app/.../foo.js        →  unchanged (has extension)
+#   /data/.../bar.parquet   →  unchanged (has extension)
+resource "aws_cloudfront_function" "site_uri_rewrite" {
+  name    = "${var.project_name}-uri-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite bare sub-paths to their /index.html for Evidence per-route static files"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+      if (uri.endsWith('/')) {
+        request.uri = uri + 'index.html';
+      } else if (uri.lastIndexOf('.') < uri.lastIndexOf('/')) {
+        request.uri = uri + '/index.html';
+      }
+      return request;
+    }
+  EOT
+}
+
 resource "aws_cloudfront_distribution" "site" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -151,9 +184,18 @@ resource "aws_cloudfront_distribution" "site" {
         forward = "none"
       }
     }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.site_uri_rewrite.arn
+    }
   }
 
-  # SPA-style fallback so client-side routes resolve.
+  # Fallback for genuine 404s (no matching key after the URI rewrite
+  # function ran). Serves the home page so users land on something
+  # rather than the raw S3 XML error. The rewrite function above is
+  # what makes valid sub-routes like /analyst-brief resolve to the
+  # right file; this fallback only kicks in for truly missing paths.
   custom_error_response {
     error_code         = 403
     response_code      = 200
