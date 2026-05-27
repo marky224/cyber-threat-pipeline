@@ -97,22 +97,43 @@ jobs:
       - name: Decompose NEON_DATABASE_URL → NEON_HOST/PORT/USER/PASSWORD/DB
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        # Each `::add-mask::` line tells the runner to redact that value
+        # in any subsequent log output (including from later steps), so the
+        # password / host / user / db are not exposed when downstream steps
+        # `echo $NEON_*` or when GitHub auto-renders the env block at step
+        # start. This is the GitHub-Actions equivalent of marking the value
+        # a secret at runtime.
         run: |
-          python3 - <<'PY' >> "$GITHUB_ENV"
+          python3 - <<'PY'
           import os, urllib.parse as up
           p = up.urlparse(os.environ["NEON_DATABASE_URL"])
-          print(f"NEON_HOST={p.hostname}")
-          print(f"NEON_PORT={p.port or 5432}")
-          print(f"NEON_USER={p.username}")
-          print(f"NEON_PASSWORD={p.password}")
-          print(f"NEON_DB={p.path.lstrip('/')}")
-          print("NEON_SSLMODE=require")
+          fields = {
+              "NEON_HOST":     p.hostname,
+              "NEON_PORT":     str(p.port or 5432),
+              "NEON_USER":     p.username,
+              "NEON_PASSWORD": p.password,
+              "NEON_DB":       p.path.lstrip("/"),
+              "NEON_SSLMODE":  "require",
+          }
+          # Mask BEFORE exporting so the values don't surface in any
+          # following auto-echoed env block.
+          for v in (p.hostname, p.username, p.password, p.path.lstrip("/")):
+              if v:
+                  print(f"::add-mask::{v}")
+          # Now export to $GITHUB_ENV for the next step.
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              for k, v in fields.items():
+                  f.write(f"{k}={v}\n")
           PY
 
       - name: dbt build (transform)
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-        run: make transform
+        run: |
+          # transform/profiles.yml is gitignored; copy the template before
+          # dbt resolves the profile.
+          cp transform/profiles.yml.example transform/profiles.yml
+          make transform
 
       # -------------------------------------------------------------------
       # [phase 7] Record dbt test results into pipeline.runs
