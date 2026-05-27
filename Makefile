@@ -100,7 +100,13 @@ report:
 	# Subshell so .ONESHELL doesn't leak `cd reporting` into the
 	# following aws lines (which would resolve `reporting/build/` to
 	# `reporting/reporting/build/` and fail with "path does not exist").
-	(cd reporting && npm ci && npm run build)
+	# `npm run sources` is REQUIRED before `npm run build` — it materializes
+	# the SQL queries in reporting/sources/neon/*.sql against the live
+	# postgres connection (EVIDENCE_SOURCE__neon__connectionString) into the
+	# parquet cache that `evidence build` then bakes into the static site.
+	# Without it, the build silently reuses the last-materialized parquet
+	# (often fixture data from CI or local dev) and deploys stale numbers.
+	(cd reporting && npm ci && npm run sources && npm run build)
 	aws s3 sync reporting/build/ "s3://$$REPORT_BUCKET/" --delete
 	aws cloudfront create-invalidation \
 		--distribution-id "$$CLOUDFRONT_DISTRIBUTION_ID" \
