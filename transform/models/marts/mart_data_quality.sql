@@ -35,6 +35,7 @@ select
     s.null_indicator_value,
     case when s.total_indicators > 0
          then round(100.0 * s.active_indicators / s.total_indicators, 2)
-         else 0 end                                                    as pct_active
+         else 0 end                                                    as pct_active,
+    (select max(modified) from {{ ref('stg_otx__pulses') }})           as max_pulse_modified
 from run r
 cross join indicator_stats s
