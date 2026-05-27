@@ -260,3 +260,34 @@ jobs:
             echo "::error::Secret-like string found in reporting/build/"
             exit 1
           fi
+
+  terraform:
+    name: terraform · validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # HCL-only check: `terraform fmt -check` + `terraform validate`. No
+    # AWS creds needed — `init -backend=false` downloads the provider but
+    # doesn't touch any AWS account. `terraform plan`/`apply` are
+    # operator actions (spec 05 §B8).
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.5"
+          terraform_wrapper: false
+
+      - name: terraform fmt (check)
+        working-directory: infra
+        run: terraform fmt -check -recursive
+
+      - name: terraform init (no backend)
+        working-directory: infra
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: infra
+        run: terraform validate
