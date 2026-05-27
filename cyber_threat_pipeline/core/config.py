@@ -22,11 +22,32 @@ class Settings(BaseSettings):
 
     otx_api_key: SecretStr = Field(..., alias="OTX_API_KEY")
 
-    # Analyst-brief providers. Two slots; each accepts 'claude' | 'grok' | 'local'.
-    # Defaults to a single local Ollama call (slots collapse when (provider, model)
-    # match). Production sets primary=claude + secondary=grok.
+    # Analyst-brief providers. The writer renders one block per unique
+    # (provider, model) pair — collapsed to a single block if only one
+    # distinct pair remains, or a <Tabs> set if two or more remain.
+    #
+    # PREFERRED: ANALYSIS_PROVIDERS = comma-separated list. Generalizes
+    # to N slots so a single Settings change picks 1, 2, 3+ providers
+    # without code changes here. Empty string falls back to the legacy
+    # PRIMARY/SECONDARY pair.
+    #
+    # LEGACY: ANALYSIS_PRIMARY_PROVIDER + ANALYSIS_SECONDARY_PROVIDER
+    # remain for backward compatibility — used when ANALYSIS_PROVIDERS
+    # is unset. Both default to 'local'.
+    analysis_providers: str = Field("", alias="ANALYSIS_PROVIDERS")
     analysis_primary_provider: str = Field("local", alias="ANALYSIS_PRIMARY_PROVIDER")
     analysis_secondary_provider: str = Field("local", alias="ANALYSIS_SECONDARY_PROVIDER")
+
+    def provider_slots(self) -> list[str]:
+        """List of provider names to query, in order.
+
+        ``ANALYSIS_PROVIDERS`` (comma-separated) wins when set; falls back
+        to the legacy ``[primary, secondary]`` pair. Whitespace and empty
+        entries are stripped.
+        """
+        if self.analysis_providers.strip():
+            return [s.strip() for s in self.analysis_providers.split(",") if s.strip()]
+        return [self.analysis_primary_provider, self.analysis_secondary_provider]
 
     # Cloud-provider API keys — OPTIONAL at Settings construction. The orchestrator
     # raises fail-fast if a *selected* slot requires a missing key.
