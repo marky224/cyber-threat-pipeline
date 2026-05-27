@@ -21,8 +21,16 @@ from cyber_threat_pipeline.analysis import providers as providers_mod
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop every env var that Settings reads so each test sets its own."""
+    """Drop every env var that Settings reads so each test sets its own.
+
+    Also override Settings.model_config to set ``env_file=None`` so that
+    a developer's local .env doesn't leak into the test environment.
+    PYDANTIC_SETTINGS_DISABLE_DOTENV is not a real pydantic-settings env
+    var; the model_config override is the supported way to bypass the
+    .env source.
+    """
     for key in (
+        "ANALYSIS_PROVIDERS",
         "ANALYSIS_PRIMARY_PROVIDER",
         "ANALYSIS_SECONDARY_PROVIDER",
         "ANTHROPIC_API_KEY",
@@ -30,13 +38,24 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "OPENAI_API_KEY",
         "GOOGLE_API_KEY",
         "OLLAMA_BASE_URL",
+        "CLAUDE_MODEL",
+        "GROK_MODEL",
+        "LOCAL_MODEL",
+        "LOCAL_NUM_CTX",
         "OTX_API_KEY",
         "NEON_DATABASE_URL",
     ):
         monkeypatch.delenv(key, raising=False)
-    # Disable Pydantic-Settings' .env file reader so a developer's local
-    # .env doesn't leak into the test environment.
-    monkeypatch.setenv("PYDANTIC_SETTINGS_DISABLE_DOTENV", "1")
+    # Disable Pydantic-Settings' .env file reader at the class-config level.
+    from pydantic_settings import SettingsConfigDict
+
+    from cyber_threat_pipeline.core.config import Settings
+
+    monkeypatch.setattr(
+        Settings,
+        "model_config",
+        SettingsConfigDict(env_file=None, env_file_encoding="utf-8", extra="ignore"),
+    )
 
 
 @pytest.fixture()
@@ -140,11 +159,14 @@ def test_default_two_local_slots_collapse_to_single_block(
     assert captured[0] == captured[1]
 
 
-def test_two_distinct_providers_render_tabs(
+def test_two_distinct_providers_render_stacked(
     monkeypatch: pytest.MonkeyPatch,
     patch_db_and_prompt: None,
     output_page: Path,
 ) -> None:
+    """N>1 providers render as a vertical stack with `---` between blocks
+    (NOT Evidence <Tabs> — Evidence's Svelte markdown preprocessor doesn't
+    nest multi-paragraph markdown reliably inside Tab components)."""
     _patch_provider_query(monkeypatch, "claude", lambda _p, **_kw: "claude body")
     _patch_provider_query(monkeypatch, "grok", lambda _p, **_kw: "grok body")
 
@@ -159,9 +181,10 @@ def test_two_distinct_providers_render_tabs(
     assert rc == 0
 
     content = output_page.read_text(encoding="utf-8")
-    assert "<Tabs>" in content
+    assert "<Tabs>" not in content
     assert "claude body" in content
     assert "grok body" in content
+    assert "\n\n---\n\n" in content
 
 
 def test_prompt_is_round_tripped_in_details(

@@ -32,7 +32,7 @@ def test_render_single_result_collapses_to_plain_block() -> None:
     assert "Local (lab) — `llama3.1`" in md
 
 
-def test_render_two_distinct_results_emit_tabs() -> None:
+def test_render_two_distinct_results_stack_with_hr_separator() -> None:
     md = render_markdown(
         generated_at=_GENERATED_AT,
         prompt=_PROMPT,
@@ -41,12 +41,16 @@ def test_render_two_distinct_results_emit_tabs() -> None:
             _result("grok", "grok-4", "grok body"),
         ],
     )
-    assert "<Tabs>" in md
-    assert "</Tabs>" in md
-    assert 'label="Claude (lab) — claude-sonnet-4-6"' in md
-    assert 'label="Grok (lab) — grok-4"' in md
+    # N>1 providers render as a vertical stack with `---` between blocks
+    # (NOT <Tabs> — Evidence's Svelte markdown preprocessor doesn't
+    # nest multi-paragraph markdown reliably inside Tab components).
+    assert "<Tabs>" not in md
+    assert "Claude (lab) — `claude-sonnet-4-6`" in md
+    assert "Grok (lab) — `grok-4`" in md
     assert "claude body" in md
     assert "grok body" in md
+    # The hr separator sits between the two provider blocks.
+    assert "\n\n---\n\n" in md
 
 
 def test_render_dedupes_same_provider_and_model() -> None:
@@ -73,9 +77,11 @@ def test_render_dedupes_keeps_different_models_of_same_provider() -> None:
             _result("local", "qwen2.5", "qwen body"),
         ],
     )
-    assert "<Tabs>" in md
+    # Same provider, different models → two distinct blocks stacked.
+    assert "<Tabs>" not in md
     assert "llama body" in md
     assert "qwen body" in md
+    assert "\n\n---\n\n" in md
 
 
 def test_render_includes_frontmatter() -> None:
