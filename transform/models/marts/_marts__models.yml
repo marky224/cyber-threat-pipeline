@@ -41,6 +41,8 @@ models:
     columns:
       - name: run_id
         tests: [not_null]
+      - name: max_pulse_modified
+        tests: [not_null]
 
   - name: brief_input
     columns:

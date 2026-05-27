@@ -1,0 +1,213 @@
+# Grafana alert-rules provisioning (apiVersion: 1).
+#
+# Four rules — full rationale + canonical SQL in _private/specs/06-monitoring-grafana.md §4.
+#   1. ctp-freshness-8d        critical   8-day SLA breach (alert 4.1)
+#   2. ctp-run-failure         warning    any failed/orphaned run in last 24h (alert 4.2)
+#   3. ctp-volume-anomaly      warning    drift OR zero on latest success (alert 4.3)
+#   4. ctp-dbt-test-failures   warning    dbt_tests_failed > 0 on latest run (alert 4.4)
+#
+# Datasource UID placeholder: <NEON_RO_UID>. The operator substitutes this with
+# the actual uid from Grafana Cloud (Configuration → Data sources → neon_ro
+# → URL slug) before provisioning. Keeping it as a placeholder lets the file
+# round-trip through yaml.safe_load in CI without leaking tenant-specific state.
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: cyber-threat-pipeline
+    folder: cyber-threat-pipeline
+    interval: 15m
+    rules:
+      - uid: ctp-freshness-8d
+        title: Pipeline freshness > 8 days
+        condition: C
+        for: 0m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          component: pipeline
+        annotations:
+          summary: Last successful pipeline run was over 8 days ago — weekly SLA breached.
+          description: |
+            hours_since_last_success exceeded 192 (8 days). The weekly cron either
+            failed to run, failed during ingestion, or is otherwise stuck. Check
+            pipeline.runs and the latest GitHub Actions pipeline.yml run.
+          runbook_url: https://github.com/marky224/cyber-threat-pipeline/blob/main/monitoring/README.md
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: <NEON_RO_UID>
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              rawSql: |
+                select extract(epoch from now() - max(started_at))/3600 as v
+                from pipeline.runs
+                where status = 'success';
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - type: query
+                  evaluator: { type: gt, params: [192] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+
+      - uid: ctp-run-failure
+        title: Pipeline run failed
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: One or more pipeline runs failed or were orphaned in the last 24 hours.
+          description: |
+            pipeline.runs.status IN ('failed','orphaned') is non-empty for runs
+            started in the last 24h. Single failures don't break the 8-day SLA
+            (that's ctp-freshness-8d) but warrant investigation. Check the run
+            audit row + the matching GitHub Actions workflow log.
+          runbook_url: https://github.com/marky224/cyber-threat-pipeline/blob/main/monitoring/README.md
+        data:
+          - refId: A
+            relativeTimeRange: { from: 86400, to: 0 }
+            datasourceUid: <NEON_RO_UID>
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              rawSql: |
+                select count(*) as v
+                from pipeline.runs
+                where status in ('failed','orphaned')
+                  and started_at > now() - interval '24 hours';
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - type: query
+                  evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+
+      - uid: ctp-volume-anomaly
+        title: Ingestion volume anomaly (drift or zero)
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          component: ingestion
+        annotations:
+          summary: Latest successful run had unusually low pulses_upserted, or zero.
+          description: |
+            The latest successful run's pulses_upserted is either zero (silent
+            failure — pipeline ran but found nothing) or below the trailing-8-run
+            rolling_avg minus 2σ (statistical drift). Either branch warrants a
+            look at OTX upstream + the ingestion logs.
+          runbook_url: https://github.com/marky224/cyber-threat-pipeline/blob/main/monitoring/README.md
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: <NEON_RO_UID>
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              rawSql: |
+                with last_success as (
+                  select id, started_at, pulses_upserted
+                  from pipeline.runs
+                  where status = 'success'
+                  order by started_at desc
+                  limit 1
+                ),
+                baseline as (
+                  select avg(pulses_upserted)        as rolling_avg,
+                         stddev_pop(pulses_upserted) as rolling_stddev
+                  from (
+                    select pulses_upserted
+                    from pipeline.runs
+                    where status = 'success'
+                      and started_at < (select started_at from last_success)
+                    order by started_at desc
+                    limit 8
+                  ) t
+                )
+                select count(*) as v
+                from last_success ls, baseline b
+                where ls.pulses_upserted = 0
+                   or ls.pulses_upserted < (b.rolling_avg - 2 * b.rolling_stddev);
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - type: query
+                  evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+
+      - uid: ctp-dbt-test-failures
+        title: dbt test failures on latest run
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          component: transform
+        annotations:
+          summary: Latest pipeline run recorded dbt_tests_failed > 0.
+          description: |
+            The most recent run (success/failed/partial) had at least one failing
+            dbt test. Data-quality contract broken somewhere — check
+            target/run_results.json or the matching dbt logs.
+          runbook_url: https://github.com/marky224/cyber-threat-pipeline/blob/main/monitoring/README.md
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: <NEON_RO_UID>
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              rawSql: |
+                select dbt_tests_failed as v
+                from pipeline.runs
+                where status in ('success','failed','partial')
+                order by started_at desc
+                limit 1;
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - type: query
+                  evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }

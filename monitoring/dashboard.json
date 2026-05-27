@@ -1,0 +1,383 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_NEON_RO",
+      "label": "neon_ro",
+      "description": "Read-only Postgres datasource (grafana_login user, grafana_ro role).",
+      "type": "datasource",
+      "pluginId": "postgres",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "panel",
+      "id": "state-timeline",
+      "name": "State timeline",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "barchart",
+      "name": "Bar chart",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "version": "1.0.0"
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Cyber Threat Pipeline — operational health. Five panels reading pipeline.runs + marts.mart_data_quality via the grafana_ro role (no raw access).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "state-timeline",
+      "title": "Run health over time",
+      "description": "pipeline.runs.status as a state timeline. Green = success, yellow = partial, red = failed/orphaned. Default range: last 90 days.",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 80
+          },
+          "mappings": [
+            { "type": "value", "options": { "success":   { "color": "green",  "index": 0 } } },
+            { "type": "value", "options": { "partial":   { "color": "yellow", "index": 1 } } },
+            { "type": "value", "options": { "failed":    { "color": "red",    "index": 2 } } },
+            { "type": "value", "options": { "orphaned":  { "color": "red",    "index": 3 } } },
+            { "type": "value", "options": { "running":   { "color": "blue",   "index": 4 } } }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": false,
+        "showValue": "auto",
+        "alignValue": "left",
+        "rowHeight": 0.9,
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select started_at as \"time\", status from pipeline.runs where $__timeFilter(started_at) order by started_at;"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Pipeline freshness (hours since last success)",
+      "description": "Hard SLA: 8 days. Thresholds — green <168h (7d), yellow 168-192h (7-8d), red >192h (8d). Matching critical alert: 4.1.",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 168 },
+              { "color": "red", "value": 192 }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select extract(epoch from now() - max(started_at))/3600 as hours_since_last_success from pipeline.runs where status = 'success';"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Intel freshness (days since OTX max(modified))",
+      "description": "Soft signal — OTX itself goes quiet sometimes. No hard threshold; informational only. Reads max_pulse_modified from mart_data_quality (grafana_ro never touches raw).",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select extract(epoch from now() - max_pulse_modified)/86400 as days_since_max_modified from marts.mart_data_quality order by run_id desc limit 1;"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Ingestion volume & drift (pulses_upserted ± 2σ baseline)",
+      "description": "Actual pulses_upserted per successful run overlaid with the trailing-8-run rolling average + ±2σ band. Drift = actual < (avg - 2σ) OR actual = 0. Matching warning alert: 4.3.",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 9 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": { "type": "linear" },
+            "stacking": { "mode": "none", "group": "A" }
+          },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "actual" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } },
+              { "id": "custom.lineWidth", "value": 3 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "rolling_avg" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "lower_2sigma" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dot" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "upper_2sigma" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dot" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "with successful as (\n  select started_at as \"time\",\n         pulses_upserted as actual\n  from pipeline.runs\n  where status = 'success'\n    and $__timeFilter(started_at)\n),\nbaseline as (\n  select started_at,\n         avg(pulses_upserted) over (\n           order by started_at\n           rows between 8 preceding and 1 preceding\n         ) as rolling_avg,\n         stddev_pop(pulses_upserted) over (\n           order by started_at\n           rows between 8 preceding and 1 preceding\n         ) as rolling_stddev\n  from pipeline.runs\n  where status = 'success'\n)\nselect\n  s.\"time\",\n  s.actual,\n  b.rolling_avg,\n  greatest(b.rolling_avg - 2 * b.rolling_stddev, 0) as lower_2sigma,\n  b.rolling_avg + 2 * b.rolling_stddev as upper_2sigma\nfrom successful s\njoin baseline b on b.started_at = s.\"time\"\norder by s.\"time\";"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "barchart",
+      "title": "dbt test results over time",
+      "description": "Stacked bars per run: passed (green), skipped (yellow), failed (red). Red bars trigger alert 4.4.",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 0, "y": 21, "w": 12, "h": 9 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "axisPlacement": "auto",
+            "axisLabel": "tests"
+          },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "passed" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "failed" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "skipped" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "auto",
+        "xField": "time",
+        "stacking": "normal",
+        "groupWidth": 0.7,
+        "barWidth": 0.97,
+        "showValue": "auto",
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select started_at as \"time\", dbt_tests_passed as passed, dbt_tests_failed as failed, dbt_tests_skipped as skipped from pipeline.runs where status in ('success','failed','partial') and $__timeFilter(started_at) order by started_at;"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Data-quality trends",
+      "description": "Indicator-corpus shape over time, joined from pipeline.runs + marts.mart_data_quality. Sudden jumps in orphan_indicators are a data-shape warning; sharp drops in pct_active signal a re-classification.",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 12, "y": 21, "w": 12, "h": 9 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "stacking": { "mode": "none", "group": "A" }
+          },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "pct_active" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "orphan_indicators" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select r.started_at as \"time\", dq.total_indicators, dq.active_indicators, dq.expired_indicators, dq.dropped_indicators, dq.orphan_indicators, dq.pct_active from pipeline.runs r join marts.mart_data_quality dq on dq.run_id = r.id where $__timeFilter(r.started_at) order by r.started_at;"
+        }
+      ]
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": ["cyber-threat-pipeline", "operations"],
+  "templating": { "list": [] },
+  "time": { "from": "now-90d", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Cyber Threat Pipeline — Operations",
+  "uid": "ctp-ops",
+  "version": 1,
+  "weekStart": ""
+}
