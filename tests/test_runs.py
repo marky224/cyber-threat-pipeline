@@ -108,3 +108,113 @@ def test_run_handle_error_message_truncated_to_2048(pg_conn: psycopg.Connection)
     _, err, _ = _status(pg_conn, run_id)
     assert err is not None
     assert len(err) == 2048
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 helpers: latest_run_id + record_dbt_results
+# ---------------------------------------------------------------------------
+
+
+def test_latest_run_id_returns_id_of_most_recent_row(
+    pg_conn: psycopg.Connection,
+) -> None:
+    from cyber_threat_pipeline.core.runs import latest_run_id
+
+    expected_id = _insert_stale_running(pg_conn, minutes_old=1)
+    assert latest_run_id(pg_conn) == expected_id
+
+
+def test_latest_run_id_returns_none_when_table_empty(
+    pg_conn: psycopg.Connection,
+) -> None:
+    from cyber_threat_pipeline.core.runs import latest_run_id
+
+    assert latest_run_id(pg_conn) is None
+
+
+def test_latest_run_id_status_agnostic(
+    pg_conn: psycopg.Connection,
+) -> None:
+    """The most-recent row wins even if it's already closed to status='success'.
+
+    Real-world case: ingest's run() context manager closes the row to
+    'success' on clean exit, so by the time record_dbt_results runs the
+    row is no longer 'running'. The helper must still find it.
+    """
+    from cyber_threat_pipeline.core.runs import latest_run_id
+
+    with pg_conn.transaction(), pg_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO pipeline.runs (status, trigger, finished_at) "
+            "VALUES ('success', 'test', now()) "
+            "RETURNING id;"
+        )
+        row = cur.fetchone()
+        assert row is not None
+        expected_id = int(row[0])
+    assert latest_run_id(pg_conn) == expected_id
+
+
+def test_latest_run_id_picks_most_recent_when_multiple(
+    pg_conn: psycopg.Connection,
+) -> None:
+    from cyber_threat_pipeline.core.runs import latest_run_id
+
+    _insert_stale_running(pg_conn, minutes_old=30)
+    newer_id = _insert_stale_running(pg_conn, minutes_old=1)
+    assert latest_run_id(pg_conn) == newer_id
+
+
+def test_record_dbt_results_writes_counts_to_run_row(
+    pg_conn: psycopg.Connection,
+    tmp_path: object,
+) -> None:
+    import json
+    from pathlib import Path
+
+    from cyber_threat_pipeline.core.runs import record_dbt_results
+
+    run_id = _insert_stale_running(pg_conn, minutes_old=1)
+
+    # Minimal run_results.json shape — only the fields the helper reads.
+    results = {
+        "results": [
+            {"unique_id": "test.foo.not_null_x", "status": "pass"},
+            {"unique_id": "test.foo.unique_x", "status": "pass"},
+            {"unique_id": "test.foo.accepted_y", "status": "fail"},
+            {"unique_id": "test.foo.compile_err", "status": "error"},
+            {"unique_id": "test.foo.skipped_z", "status": "skipped"},
+            # Non-test nodes (models) are ignored.
+            {"unique_id": "model.foo.mart_x", "status": "success"},
+        ]
+    }
+    p = Path(str(tmp_path)) / "run_results.json"
+    p.write_text(json.dumps(results), encoding="utf-8")
+
+    passed, failed, skipped = record_dbt_results(pg_conn, run_id=run_id, results_path=str(p))
+    assert (passed, failed, skipped) == (2, 2, 1)
+
+    with pg_conn.cursor() as cur:
+        cur.execute(
+            "SELECT dbt_tests_passed, dbt_tests_failed, dbt_tests_skipped "
+            "FROM pipeline.runs WHERE id = %s;",
+            (run_id,),
+        )
+        row = cur.fetchone()
+    assert row == (2, 2, 1)
+
+
+def test_record_dbt_results_handles_empty_results(
+    pg_conn: psycopg.Connection,
+    tmp_path: object,
+) -> None:
+    import json
+    from pathlib import Path
+
+    from cyber_threat_pipeline.core.runs import record_dbt_results
+
+    run_id = _insert_stale_running(pg_conn, minutes_old=1)
+    p = Path(str(tmp_path)) / "run_results.json"
+    p.write_text(json.dumps({"results": []}), encoding="utf-8")
+
+    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (0, 0, 0)

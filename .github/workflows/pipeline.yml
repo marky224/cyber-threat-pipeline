@@ -87,22 +87,76 @@ jobs:
 
       # -------------------------------------------------------------------
       # [phase 3] Transform — dbt build (isolated transform/ env)
-      # Captures dbt test results into the current pipeline_runs row.
+      #
+      # dbt-postgres reads discrete NEON_HOST/PORT/USER/PASSWORD/DB/SSLMODE
+      # env vars (per transform/profiles.yml.example). Parse the pooled
+      # NEON_DATABASE_URL once here and export the components into
+      # $GITHUB_ENV so this and the evidence step below can use them
+      # without re-parsing.
       # -------------------------------------------------------------------
+      - name: Decompose NEON_DATABASE_URL → NEON_HOST/PORT/USER/PASSWORD/DB
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import os, urllib.parse as up
+          p = up.urlparse(os.environ["NEON_DATABASE_URL"])
+          print(f"NEON_HOST={p.hostname}")
+          print(f"NEON_PORT={p.port or 5432}")
+          print(f"NEON_USER={p.username}")
+          print(f"NEON_PASSWORD={p.password}")
+          print(f"NEON_DB={p.path.lstrip('/')}")
+          print("NEON_SSLMODE=require")
+          PY
+
       - name: dbt build (transform)
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
         run: make transform
 
       # -------------------------------------------------------------------
-      # [phase 4] Analyst brief — Grok + Claude, side by side
-      # Writes markdown into reporting/pages/ for the Evidence build.
+      # [phase 7] Record dbt test results into pipeline.runs
+      #
+      # The latest 'running' row was opened by the ingest step; this writes
+      # dbt_tests_passed/failed/skipped into it so the Grafana panel can
+      # render the test history. Fail-fast if no running row exists — that
+      # would mean ingest didn't open one, which is a real upstream failure
+      # we don't want to silently mask.
+      # Spec: 07-orchestration.md §3.
       # -------------------------------------------------------------------
-      - name: Analyst brief (Grok + Claude)
+      - name: Record dbt test results
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          uv run python - <<'PY'
+          import os, sys, psycopg
+          from cyber_threat_pipeline.core.runs import latest_run_id, record_dbt_results
+
+          with psycopg.connect(os.environ["NEON_DATABASE_URL"]) as conn:
+              run_id = latest_run_id(conn)
+              if run_id is None:
+                  sys.exit("no pipeline.runs row to update — ingest step must have failed")
+              passed, failed, skipped = record_dbt_results(
+                  conn, run_id=run_id, results_path="transform/target/run_results.json"
+              )
+              print(f"recorded dbt tests on run {run_id}: passed={passed} failed={failed} skipped={skipped}")
+          PY
+
+      # -------------------------------------------------------------------
+      # [phase 4] Analyst brief
+      # Writes markdown into reporting/pages/ for the Evidence build.
+      # ANALYSIS_PROVIDERS picks which slots run; default 'claude' is the
+      # single-model production setup. Override via Repository Variable
+      # (NOT a Secret — non-sensitive).
+      # -------------------------------------------------------------------
+      - name: Analyst brief
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          ANALYSIS_PROVIDERS: ${{ vars.ANALYSIS_PROVIDERS || 'claude' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: make analysis
 
       # -------------------------------------------------------------------
@@ -121,6 +175,10 @@ jobs:
       - name: Build + deploy Evidence site
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          # Evidence reads the postgres source via a single connection-string
+          # env var — same value as NEON_DATABASE_URL; the variable name is
+          # what the Evidence postgres adapter looks for.
+          EVIDENCE_SOURCE__neon__connectionString: ${{ secrets.NEON_DATABASE_URL }}
           REPORT_BUCKET: ${{ secrets.REPORT_BUCKET }}
           CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
         run: make report

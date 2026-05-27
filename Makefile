@@ -97,6 +97,12 @@ analysis:
 # AWS_PROFILE locally).
 .PHONY: report
 report:
+	# Fail-fast env contract (spec 07 §2.5). A missing var would otherwise
+	# silently produce a broken `s3://` URL or skip the invalidation;
+	# fail loudly instead so local + CI failure modes are identical.
+	@: "$${REPORT_BUCKET:?REPORT_BUCKET is required (output of terraform apply in infra/)}"
+	@: "$${CLOUDFRONT_DISTRIBUTION_ID:?CLOUDFRONT_DISTRIBUTION_ID is required (output of terraform apply in infra/)}"
+	@: "$${EVIDENCE_SOURCE__neon__connectionString:?EVIDENCE_SOURCE__neon__connectionString is required (same value as NEON_DATABASE_URL)}"
 	# Subshell so .ONESHELL doesn't leak `cd reporting` into the
 	# following aws lines (which would resolve `reporting/build/` to
 	# `reporting/reporting/build/` and fail with "path does not exist").
