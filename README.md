@@ -6,42 +6,24 @@ This is the modern-data-stack successor to [`Threat-Intel-ETL`](https://github.c
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    OTX[AlienVault OTX]
-
-    subgraph ETL["Python ETL · uv · 3.12"]
-        Ingest["ingestion<br/>watermark-driven upsert"]
-        Analysis["analysis<br/>LLM brief · Claude primary<br/>any 2 providers side-by-side"]
-    end
-
-    subgraph Neon["Neon Postgres · pooled"]
-        Raw[("raw")]
-        Marts[("marts")]
-        Audit[("pipeline.runs<br/>pipeline.state")]
-    end
-
-    DBT["dbt Core<br/>staging → intermediate → marts<br/>tested + documented"]
-
-    Evidence["Evidence.dev<br/>static site build"]
-    AWS["AWS S3 + CloudFront<br/>+ ACM + Route 53"]
-    Grafana["Grafana Cloud<br/>dashboard + alerts as code"]
-
-    OTX --> Ingest --> Raw --> DBT --> Marts
-    Marts --> Analysis
-    Marts --> Evidence
-    Analysis --> Evidence
-    Evidence --> AWS
-    Ingest -.audit.-> Audit
-    DBT -.audit.-> Audit
-    Analysis -.audit.-> Audit
-    Audit -.grafana_ro.-> Grafana
-    Marts -.grafana_ro.-> Grafana
+```
+AlienVault OTX
+   │  (incremental pull via modified_since)
+   ▼
+Python ETL (cyber_threat_pipeline/ingestion)
+   │  extract → transform (pandas) → load (idempotent upsert)
+   ▼
+Neon Postgres ── raw schema ──►  dbt (transform/)  ──► marts schema
+   │                                                      │
+   │ (read-only role)                                     │ (build-time queries)
+   ▼                                                      ▼
+Grafana Cloud (monitoring/)                         Evidence.dev (reporting/)
+  Pipeline health — LIVE, operational, alerting     Static site → S3 + CloudFront
 ```
 
-**→ Full annotated breakdown:** [`docs/architecture.md`](docs/architecture.md) (components, data flow, trust boundaries).
+**→ Full annotated breakdown with detailed system diagram:** [`docs/architecture.md`](docs/architecture.md) (Mermaid diagram, per-component notes, data flow, trust boundaries).
 
-Orchestrated by a single weekly **GitHub Actions** cron (plus manual dispatch); a separate CI workflow runs lint, type-check, and tests on every push.
+Orchestrated by a single weekly **GitHub Actions** cron (plus manual dispatch); a separate CI workflow runs lint, type-check, and tests on every push. The Grafana dashboard and its alert rules ship as JSON + YAML in `monitoring/` — no UI-edited state — so any operational drift shows up in `git diff`, not by surprise during an incident.
 
 ## Live
 
@@ -71,25 +53,19 @@ The litmus test: *is this about what the data **means** (→ Evidence) or about 
 
 Every Monday at 09:00 UTC, [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) walks five stages:
 
-1. **Ingest** (`make ingest`) — pulls OTX pulses modified since the last successful watermark in `pipeline.state`, transforms them in pandas, idempotently upserts into Neon's `raw` schema.
-2. **Transform** (`make transform`) — the isolated dbt env builds 9 marts (staging → intermediate → marts), runs schema + data tests, and captures the result.
-3. **Analyse** (`make analysis`) — the configured primary + secondary LLM providers each render the same prompt against the current marts; the side-by-side output replaces `reporting/pages/analyst-brief.md` (gitignored, regenerated each run).
+1. **Ingest** (`make ingest`) — pulls OTX pulses modified since the watermark in `pipeline.state`, transforms in pandas, idempotently upserts into Neon's `raw` schema. The watermark advances only on success, so failed runs are replayable.
+2. **Transform** (`make transform`) — the isolated dbt env builds 9 marts (staging → intermediate → marts), runs schema + data tests, captures the result for the audit row.
+3. **Analyse** (`make analysis`) — the configured primary + secondary LLM providers each render the same prompt against the current marts; output replaces `reporting/pages/analyst-brief.md` (gitignored, regenerated each run). Claude is the production primary; `ANALYSIS_PRIMARY_PROVIDER` swaps in Grok / GPT / Gemini / local Ollama with no code change.
 4. **Publish** (`make report`) — Evidence builds the static site, syncs to S3 under the GitHub-OIDC deploy role, invalidates CloudFront.
 5. **Audit** — each stage writes a row to `pipeline.runs` with status, row counts, and dbt test outcomes. Grafana reads this table through the read-only `grafana_ro` role; a failure trips the `ctp-run-failure` alert.
 
-Every step is reproducible locally with the same `make` target — local dev and CI run identical commands.
+Every stage is reproducible locally with the same `make` target — local dev and the weekly cron invoke identical commands.
 
-## Key engineering decisions
+## Security posture
 
-Choices that shaped the build, in case you're skimming for judgment rather than just stack:
+**Least-privilege observability.** Grafana Cloud connects to Neon as `grafana_ro`, scoped strictly to `marts` and `pipeline.runs`. The application role used by ingest, dbt, and the analyst is separate and only runs from inside the GitHub Actions cron.
 
-- **Two surfaces, one source of truth.** Evidence (analysis) and Grafana (operations) both read from Neon but answer different questions — the [litmus test above](#the-evidence--grafana-split) decides where a new query belongs. Built-in discipline against blurring the two.
-- **Watermark-driven, idempotent ingest.** `pipeline.state.modified_since` advances only on success, so every run is replayable. Audit rows in `pipeline.runs` are the canonical "did this run actually work" signal — and the same table is what Grafana renders.
-- **Provider-agnostic LLM analyst.** Claude is the primary, but the analyst is built to swap providers via a single env-var (`ANALYSIS_PRIMARY_PROVIDER`). Any two providers render side-by-side on the brief page, so model-to-model variance on the same input is observable instead of hidden.
-- **Least-privilege observability.** Grafana connects as `grafana_ro`, scoped to `marts` + `pipeline_runs`. The ops dashboard can't widen access if its credentials leak.
-- **OIDC-only AWS access.** GitHub Actions assumes a Terraform-managed IAM role via OIDC for S3 + CloudFront deploys — no long-lived AWS keys live in repo secrets, and the trust policy pins to `ref:refs/heads/main` + `environment:production`.
-- **Single `Makefile`, two callers.** Local dev and CI invoke the same targets (`make ingest`, `make transform`, `make analysis`, `make report`). If something only works in CI, that's a bug.
-- **Alerts and dashboards as code.** Grafana state lives in `monitoring/dashboard.json` + `monitoring/alerts.yaml`. Drift shows up in `git diff`, not by surprise during an incident.
+**OIDC-only AWS access.** Site deploys assume an IAM role via GitHub's OIDC provider — no long-lived AWS keys in repo secrets. The trust policy is pinned to `ref:refs/heads/main` + `environment:production`, and the OIDC provider itself is a Terraform `data` lookup so the same code works whether the AWS account already has one or not.
 
 ## Stack
 
@@ -108,32 +84,19 @@ Choices that shaped the build, in case you're skimming for judgment rather than 
 ## Repository layout
 
 ```
-cyber_threat_pipeline/   Python app package (core/, ingestion/, analysis/)
-sql/                     Raw schema + pipeline_runs + pipeline_state + grafana_ro role
-transform/               dbt Core project (isolated env)
-reporting/               Evidence.dev project (Node)
-monitoring/              Grafana dashboards + alert rules as code
-infra/                   Terraform (deploy bucket, CDN, DNS, OIDC role)
-tests/                   pytest
-docs/                    Public assets (architecture diagrams, etc.)
-.github/workflows/       ci.yml (push/PR) + pipeline.yml (weekly cron + dispatch)
+cyber_threat_pipeline/      Python app package
+├── core/                   Config (pydantic-settings), logging, Neon connection helpers
+├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
+└── analysis/               LLM analyst brief · Claude primary · 5 providers swappable · any 2 side-by-side
+sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
+transform/                  dbt Core (isolated env) · 9 marts · staging → intermediate → marts · schema + data tests
+reporting/                  Evidence.dev (Node 20 LTS) · 3 pages · postgres datasource via single connection-string env
+monitoring/                 Grafana dashboard (5 panels) + alerts (4 rules) as code · no UI state
+infra/                      Terraform · S3 + CloudFront + ACM + Route 53 + GitHub OIDC deploy role · no static AWS keys
+tests/                      pytest
+docs/                       architecture.md (annotated diagram) + screenshots/
+.github/workflows/          ci.yml (push/PR · 6 checks) + pipeline.yml (weekly cron + dispatch)
 ```
-
-## Status
-
-**Feature-complete.** Shipped in seven dedicated phases (`sql/` → `ingestion/` → `transform/` → `analysis/` → `reporting/` + `infra/` → `monitoring/` → orchestration), each with its own PR.
-
-| Phase | Component | Status |
-|---|---|---|
-| 1 | `sql/` — schemas, raw + pipeline tables, `grafana_ro` role | ✅ shipped |
-| 2 | `cyber_threat_pipeline/{core,ingestion}/` — OTX → Neon raw | ✅ shipped |
-| 3 | `transform/` — dbt Core project (9 marts, isolated dbt env) | ✅ shipped |
-| 4 | `cyber_threat_pipeline/analysis/` — LLM analyst brief (Claude primary, 5 providers swappable) | ✅ shipped |
-| 5 | `reporting/` + `infra/` — Evidence (Node 20, postgres datasource, 3 pages) + Terraform (S3 + CloudFront + ACM + Route 53 + GitHub OIDC + deploy role) | ✅ shipped |
-| 6 | `monitoring/` — Grafana dashboards + alerts as code (5 panels, 4 alerts, JSON+YAML, no UI state) | ✅ shipped |
-| 7 | `.github/workflows/` orchestration polish + Makefile final wiring (dbt-test-result capture into `pipeline.runs`, env-var passthrough, fail-fast checks) | ✅ shipped |
-
-Every weekly cron writes a full `pipeline.runs` audit row, the Evidence site refreshes, the Grafana dashboard shows the live operational view, and the analyst brief is regenerated by the configured primary LLM provider (Claude in production).
 
 ## Local development
 
