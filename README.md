@@ -40,6 +40,12 @@ Both surfaces are refreshed every Monday by the weekly cron in `.github/workflow
 |---|---|---|
 | [![Home](docs/screenshots/evidence-home.png)](https://cyber-intel.markandrewmarquez.com/) | [![Analyst Brief](docs/screenshots/evidence-analyst-brief.png)](https://cyber-intel.markandrewmarquez.com/analyst-brief) | [![Freshness](docs/screenshots/evidence-freshness.png)](https://cyber-intel.markandrewmarquez.com/freshness) |
 
+### Grafana dashboard preview
+
+| Pipeline health, freshness, ingestion volume, and dbt test trends |
+|---|
+| [![Grafana](docs/screenshots/grafana-dashboard.png)](https://mec104e.grafana.net/public-dashboards/c5f4b57d91aa4e2395a4899fc74dc55f) |
+
 ## The Evidence / Grafana split
 
 These two surfaces are deliberately separated:
