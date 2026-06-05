@@ -16,6 +16,12 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # Treat empty-string env vars as unset so field defaults apply. A blank
+        # value otherwise reaches the parser and fails type coercion — e.g.
+        # FORCE_FULL_BACKFILL="" is injected on schedule-triggered CI runs
+        # (workflow_dispatch input defaults don't apply to `schedule`), which
+        # crashed Settings() with a bool_parsing error before any work began.
+        env_ignore_empty=True,
     )
 
     neon_database_url: PostgresDsn = Field(..., alias="NEON_DATABASE_URL")
