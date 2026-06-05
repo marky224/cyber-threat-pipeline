@@ -119,4 +119,4 @@ Stage commands (`make ingest`, `make transform`, `make analysis`, `make report`,
 
 © 2026 Mark Andrew Marquez. All rights reserved.
 
-Licensed under the [PolyForm Strict License 1.0.0](LICENSE) — source-available for personal study and noncommercial evaluation. **Distribution, modification, derivative works, and forks intended for reuse require prior written permission.** Open an issue or email me if you want to use any part of this elsewhere.
+This software is **proprietary** — all rights reserved. No license is granted to use, copy, modify, or distribute it without prior written permission of the copyright holder; see [LICENSE](LICENSE) for the full terms. Open an issue or email me if you want to use any part of this elsewhere.
