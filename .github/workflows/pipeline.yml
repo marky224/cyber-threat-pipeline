@@ -46,10 +46,10 @@ jobs:
       # Setup
       # -------------------------------------------------------------------
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -67,7 +67,7 @@ jobs:
       # is scoped to this repo + main branch (and workflow_dispatch).
       # -------------------------------------------------------------------
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -195,7 +195,7 @@ jobs:
       # are outputs of the Terraform stack in infra/.
       # -------------------------------------------------------------------
       - name: Set up Node 20 (Evidence build)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
