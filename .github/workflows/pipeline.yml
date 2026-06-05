@@ -82,7 +82,10 @@ jobs:
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
-          FORCE_FULL_BACKFILL: ${{ inputs.force_full_backfill }}
+          # `|| 'false'`: `schedule` runs don't apply workflow_dispatch input
+          # defaults, so inputs.force_full_backfill is empty on cron. Without the
+          # fallback the blank value crashes Settings() at parse time.
+          FORCE_FULL_BACKFILL: ${{ inputs.force_full_backfill || 'false' }}
         run: make ingest
 
       # -------------------------------------------------------------------
