@@ -1,0 +1,18 @@
+# Keeps the SHA-pinned GitHub Actions current. Dependabot opens a weekly PR
+# that bumps each action's commit hash (and the trailing `# vX.Y.Z` comment)
+# to the latest release — the mechanism that surfaces runtime deprecations
+# (e.g. Node 20 -> Node 24) before they break the scheduled pipeline.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+    # One grouped PR for all action bumps rather than one PR per action.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
