@@ -48,3 +48,22 @@ models:
     columns:
       - name: generated_at
         tests: [not_null]
+
+unit_tests:
+  - name: mart_indicator_freshness_buckets_on_live_expiration
+    description: >
+      A lapsed indicator that was never re-synced (frozen is_expired = false)
+      must bucket as expired, not expiring_le_30d.
+    model: mart_indicator_freshness
+    given:
+      - input: ref('stg_otx__indicators')
+        rows:
+          - {type: 'IPv4',   expiration: '2020-01-01 00:00:00', is_expired: false}
+          - {type: 'IPv4',   expiration: '2020-01-01 00:00:00', is_expired: true}
+          - {type: 'IPv4',   expiration: '2999-01-01 00:00:00', is_expired: false}
+          - {type: 'domain', expiration: null,                  is_expired: false}
+    expect:
+      rows:
+        - {type: 'IPv4',   freshness_bucket: 'expired',       indicator_count: 2}
+        - {type: 'IPv4',   freshness_bucket: 'active_gt_30d', indicator_count: 1}
+        - {type: 'domain', freshness_bucket: 'no_expiration', indicator_count: 1}
