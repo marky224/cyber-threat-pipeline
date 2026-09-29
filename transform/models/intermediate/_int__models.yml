@@ -36,3 +36,31 @@ models:
                 field: id
       - name: industry
         tests: [not_null]
+
+  - name: int_indicator_freshness
+    description: >
+      One row per indicator with the Q6 freshness flags (is_expired, is_dropped,
+      is_active) recomputed live on every read. stg_otx__indicators is incremental,
+      so its copies of these flags are frozen at each row's last sync; marts that
+      count expired / dropped / active indicators read them from here.
+
+unit_tests:
+  - name: int_indicator_freshness_recomputes_frozen_flags
+    description: >
+      Staging rows whose flags went stale without a re-sync: a lapsed expiration
+      must read expired, and an indicator left out of its pulse's latest sync must
+      read dropped — regardless of the frozen staging values.
+    model: int_indicator_freshness
+    given:
+      - input: ref('stg_otx__indicators')
+        rows:
+          - {id: 1, pulse_id: 'P1', expiration: '2020-01-01 00:00:00', synced_at: '2026-01-01 00:00:00+00', is_expired: false, is_dropped: false, is_active: true}
+          - {id: 2, pulse_id: 'P1', expiration: null,                  synced_at: '2026-01-01 00:00:00+00', is_expired: false, is_dropped: false, is_active: true}
+          - {id: 3, pulse_id: 'P1', expiration: '2999-01-01 00:00:00', synced_at: '2020-01-01 00:00:00+00', is_expired: false, is_dropped: false, is_active: true}
+          - {id: 4, pulse_id: 'P2', expiration: '2999-01-01 00:00:00', synced_at: '2020-01-01 00:00:00+00', is_expired: false, is_dropped: false, is_active: true}
+    expect:
+      rows:
+        - {id: 1, is_expired: true,  is_dropped: false, is_active: false}
+        - {id: 2, is_expired: false, is_dropped: false, is_active: true}
+        - {id: 3, is_expired: false, is_dropped: true,  is_active: false}
+        - {id: 4, is_expired: false, is_dropped: false, is_active: true}
