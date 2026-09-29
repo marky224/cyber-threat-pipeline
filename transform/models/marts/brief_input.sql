@@ -3,9 +3,9 @@
 with corpus_totals as (
     select
         (select count(*) from {{ ref('stg_otx__pulses') }})                                   as total_pulses,
-        (select count(*) from {{ ref('stg_otx__indicators') }})                                as total_indicators,
-        (select count(*) from {{ ref('stg_otx__indicators') }} where is_active)                as active_indicators,
-        (select count(*) from {{ ref('stg_otx__indicators') }} where is_expired)               as expired_indicators
+        (select count(*) from {{ ref('int_indicator_freshness') }})                                as total_indicators,
+        (select count(*) from {{ ref('int_indicator_freshness') }} where is_active)                as active_indicators,
+        (select count(*) from {{ ref('int_indicator_freshness') }} where is_expired)               as expired_indicators
 ),
 top_types as (
     select coalesce(
@@ -80,7 +80,7 @@ emerging_indicators_7d as (
     ) as emerging_indicators_7d
     from (
         select type, count(*) as cnt
-        from {{ ref('stg_otx__indicators') }}
+        from {{ ref('int_indicator_freshness') }}
         where first_seen_at >= now() - interval '7 days' and is_active
         group by type
     ) t
