@@ -154,8 +154,9 @@ def record_dbt_results(
     """Parse dbt's target/run_results.json and write the test counts into pipeline.runs.
 
     Spec: 07-orchestration.md §3 + 03-dbt-transform.md §9. Counts nodes whose
-    unique_id starts with "test." (data tests + custom singular tests); each
-    is counted in exactly one of passed / failed / skipped buckets:
+    unique_id starts with "test." (data tests + custom singular tests) or
+    "unit_test." (dbt ≥1.8 unit tests); each is counted in exactly one of
+    passed / failed / skipped buckets:
        - pass    → passed
        - fail    → failed
        - error   → failed (compilation / runtime error — treat as test failure)
@@ -167,7 +168,9 @@ def record_dbt_results(
 
     results = json.loads(pathlib.Path(results_path).read_text(encoding="utf-8"))
     test_nodes = [
-        r for r in results.get("results", []) if r.get("unique_id", "").startswith("test.")
+        r
+        for r in results.get("results", [])
+        if r.get("unique_id", "").startswith(("test.", "unit_test."))
     ]
     passed = sum(1 for r in test_nodes if r.get("status") == "pass")
     failed = sum(1 for r in test_nodes if r.get("status") in ("fail", "error"))
