@@ -1,6 +1,7 @@
 """pipeline.runs lifecycle: stale sweep + run() context manager + RunHandle.
 
-Spec: _private/specs/02-ingestion.md §8.
+Spec: _private/specs/02-ingestion.md §8. ``python -m cyber_threat_pipeline.core.runs``
+is ``make record-dbt`` (spec 07 §3).
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -193,6 +195,24 @@ def record_dbt_results(
     return passed, failed, skipped
 
 
+def main(results_path: str = "transform/target/run_results.json") -> None:
+    """``make record-dbt``: write dbt test counts into the latest pipeline.runs row.
+
+    Spec: 07-orchestration.md §3. Reads NEON_DATABASE_URL straight from the
+    environment (not Settings(), which would also demand OTX_API_KEY), so CI
+    needs only that one secret. Exits non-zero if no row exists — that means
+    ingest never opened one, a real upstream failure we don't want to mask.
+    """
+    with psycopg.connect(os.environ["NEON_DATABASE_URL"]) as conn:
+        run_id = latest_run_id(conn)
+        if run_id is None:
+            sys.exit("no pipeline.runs row to update — ingest step must have failed")
+        passed, failed, skipped = record_dbt_results(conn, run_id=run_id, results_path=results_path)
+        print(
+            f"recorded dbt tests on run {run_id}: passed={passed} failed={failed} skipped={skipped}"
+        )
+
+
 def detect_git_sha() -> str | None:
     """Prefer GITHUB_SHA (CI); fall back to git rev-parse; None if neither works."""
     sha = os.environ.get("GITHUB_SHA")
@@ -208,3 +228,7 @@ def _json(obj: object) -> str | None:
     if obj is None:
         return None
     return json.dumps(obj)
+
+
+if __name__ == "__main__":
+    main()
