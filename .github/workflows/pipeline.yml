@@ -162,9 +162,17 @@ jobs:
       # [phase 7] Record dbt test results into pipeline.runs
       # Writes dbt_tests_passed/failed/skipped into the latest pipeline.runs
       # row (opened by ingest). Logic lives in `make record-dbt`.
+      #
+      # Also runs when dbt build FAILED: a failing test fails `dbt build`,
+      # and recording those counts is what lets the ctp-dbt-test-failures
+      # alert fire. Gated on run_results.json existing so a dbt that died
+      # before running anything (or a skipped dbt after failed ingest) doesn't
+      # add a second, misleading error. The job still fails; analysis and
+      # report stay skipped.
       # Spec: 07-orchestration.md §3.
       # -------------------------------------------------------------------
       - name: Record dbt test results
+        if: ${{ !cancelled() && hashFiles('transform/target/run_results.json') != '' }}
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
         run: make record-dbt
