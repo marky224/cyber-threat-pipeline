@@ -36,6 +36,26 @@ env:
   AWS_REGION: us-east-1
 
 jobs:
+  # -------------------------------------------------------------------------
+  # Keepalive — GitHub disables `schedule` triggers in a public repo after
+  # 60 days without repository activity (scheduled runs don't count). Each
+  # run re-enables this workflow via the REST API, which resets that timer.
+  # Independent of the weekly job: no `needs`, no secrets, no environment,
+  # no checkout. Job-level permissions replace the workflow default, so this
+  # token can only touch Actions — no OIDC, no contents.
+  # -------------------------------------------------------------------------
+  keepalive:
+    name: keepalive
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Re-enable pipeline.yml (resets the 60-day inactivity timer)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/pipeline.yml/enable"
+
   pipeline:
     name: weekly run
     runs-on: ubuntu-latest
