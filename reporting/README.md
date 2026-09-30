@@ -12,13 +12,13 @@ Spec: `_private/specs/05-reporting-evidence.md`.
 
 ## Stack
 
-- **[Evidence](https://evidence.dev/)** v40, Node 20 LTS (pinned in `.nvmrc`).
+- **[Evidence](https://evidence.dev/)** v40, Node 24 LTS (pinned in `.nvmrc`).
 - **Postgres datasource** (`@evidence-dev/postgres`) — queries the `marts.*` tables on Neon at build time, materializes results into parquet files in `build/data/`. The deployed site is fully static; the browser uses DuckDB-WASM to query the baked parquet.
 
 ## Local development
 
 ```bash
-nvm use                                  # picks up .nvmrc → Node 20
+nvm use                                  # picks up .nvmrc → Node 24
 npm install --force                      # initial install (Evidence ships peer-dep conflicts)
 EVIDENCE_SOURCE__neon__connectionString="postgresql://<user>:<pw>@<host>:<port>/<db>?sslmode=require" npm run sources
 EVIDENCE_SOURCE__neon__connectionString="..." npm run dev   # localhost:3000, live reload

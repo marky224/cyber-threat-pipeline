@@ -205,10 +205,10 @@ jobs:
       # Deploy = aws s3 sync + CloudFront invalidation; bucket + dist id
       # are outputs of the Terraform stack in infra/.
       # -------------------------------------------------------------------
-      - name: Set up Node 20 (Evidence build)
+      - name: Set up Node (Evidence build, version from reporting/.nvmrc)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version-file: reporting/.nvmrc
           cache: "npm"
           cache-dependency-path: reporting/package-lock.json
 

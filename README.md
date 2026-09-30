@@ -96,7 +96,7 @@ cyber_threat_pipeline/      Python app package
 └── analysis/               LLM analyst brief · Claude primary · 5 providers swappable · any 2 side-by-side
 sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
 transform/                  dbt Core (isolated env) · 9 marts · staging → intermediate → marts · schema + data tests
-reporting/                  Evidence.dev (Node 20 LTS) · 3 pages · postgres datasource via single connection-string env
+reporting/                  Evidence.dev (Node 24 LTS) · 3 pages · postgres datasource via single connection-string env
 monitoring/                 Grafana dashboard (5 panels) + alerts (4 rules) as code · no UI state
 infra/                      Terraform · S3 + CloudFront + ACM + Route 53 + GitHub OIDC deploy role · no static AWS keys
 tests/                      pytest

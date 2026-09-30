@@ -187,10 +187,10 @@ jobs:
       - name: Set up Python 3.12
         run: uv python install 3.12
 
-      - name: Set up Node 20
+      - name: Set up Node (version from reporting/.nvmrc)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version-file: reporting/.nvmrc
           cache: "npm"
           cache-dependency-path: reporting/package-lock.json
 
