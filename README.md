@@ -113,7 +113,7 @@ make typecheck    # mypy
 make test         # pytest
 ```
 
-Stage commands (`make ingest`, `make transform`, `make analysis`, `make report`, `make all`) run the same targets that the weekly cron invokes — see [How a weekly run executes](#how-a-weekly-run-executes) for what each stage does.
+Stage commands (`make ingest`, `make transform`, `make record-dbt`, `make analysis`, `make report`, `make all`) run the same targets that the weekly cron invokes — see [How a weekly run executes](#how-a-weekly-run-executes) for what each stage does.
 
 ## License
 
