@@ -204,6 +204,31 @@ def test_record_dbt_results_writes_counts_to_run_row(
     assert row == (2, 2, 1)
 
 
+def test_record_dbt_results_counts_unit_tests(
+    pg_conn: psycopg.Connection,
+    tmp_path: object,
+) -> None:
+    """dbt unit tests (unique_id prefix "unit_test.") count alongside data tests."""
+    import json
+    from pathlib import Path
+
+    from cyber_threat_pipeline.core.runs import record_dbt_results
+
+    run_id = _insert_stale_running(pg_conn, minutes_old=1)
+    results = {
+        "results": [
+            {"unique_id": "test.foo.not_null_x", "status": "pass"},
+            {"unique_id": "unit_test.foo.mart_x.test_logic", "status": "pass"},
+            {"unique_id": "unit_test.foo.mart_x.test_edge", "status": "fail"},
+            {"unique_id": "unit_test.foo.mart_x.test_skip", "status": "skipped"},
+        ]
+    }
+    p = Path(str(tmp_path)) / "run_results.json"
+    p.write_text(json.dumps(results), encoding="utf-8")
+
+    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (2, 1, 1)
+
+
 def test_record_dbt_results_handles_empty_results(
     pg_conn: psycopg.Connection,
     tmp_path: object,
@@ -218,3 +243,57 @@ def test_record_dbt_results_handles_empty_results(
     p.write_text(json.dumps({"results": []}), encoding="utf-8")
 
     assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (0, 0, 0)
+
+
+# ---------------------------------------------------------------------------
+# `make record-dbt` entrypoint: runs.main()
+# ---------------------------------------------------------------------------
+
+
+def test_main_exits_when_no_run_row(
+    pg_conn: psycopg.Connection,
+    pg_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cyber_threat_pipeline.core.runs import main
+
+    monkeypatch.setenv("NEON_DATABASE_URL", pg_url)
+    with pytest.raises(SystemExit) as exc:
+        main(results_path="unused-because-no-row.json")
+    assert exc.value.code == "no pipeline.runs row to update — ingest step must have failed"
+
+
+def test_main_records_counts_on_latest_row(
+    pg_conn: psycopg.Connection,
+    pg_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: object,
+) -> None:
+    import json
+    from pathlib import Path
+
+    from cyber_threat_pipeline.core.runs import main
+
+    run_id = _insert_stale_running(pg_conn, minutes_old=1)
+    p = Path(str(tmp_path)) / "run_results.json"
+    p.write_text(
+        json.dumps({"results": [{"unique_id": "test.foo.not_null_x", "status": "pass"}]}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("NEON_DATABASE_URL", pg_url)
+    main(results_path=str(p))
+
+    assert capsys.readouterr().out.strip() == (
+        f"recorded dbt tests on run {run_id}: passed=1 failed=0 skipped=0"
+    )
+
+    # Fresh connection: an uncommitted write from main() would not be visible.
+    with psycopg.connect(pg_url) as fresh, fresh.cursor() as cur:
+        cur.execute(
+            "SELECT dbt_tests_passed, dbt_tests_failed, dbt_tests_skipped "
+            "FROM pipeline.runs WHERE id = %s;",
+            (run_id,),
+        )
+        assert cur.fetchone() == (1, 0, 0)

@@ -32,9 +32,10 @@ help:
 	@echo "  Pipeline stages (each wired to its phase)"
 	@echo "    ingest          [phase 2] OTX → Neon raw schema"
 	@echo "    transform       [phase 3] dbt build (isolated transform/ env)"
+	@echo "    record-dbt      [phase 7] dbt test counts → latest pipeline.runs row"
 	@echo "    analysis        [phase 4] LLM analyst brief (Grok + Claude)"
 	@echo "    report          [phase 5] build Evidence site + deploy to S3/CloudFront"
-	@echo "    all             ingest → transform → analysis → report"
+	@echo "    all             ingest → transform → record-dbt → analysis → report"
 	@echo ""
 	@echo "  Housekeeping"
 	@echo "    clean           remove caches and build artifacts"
@@ -84,6 +85,16 @@ ingest:
 transform:
 	$(MAKE) -C transform build
 
+# [phase 7] Record dbt test counts — spec: _private/specs/07-orchestration.md §3
+# Writes dbt_tests_passed/failed/skipped from transform/target/run_results.json
+# into the latest pipeline.runs row. Reads NEON_DATABASE_URL from the
+# environment (not .env). CI also runs this after a failed dbt build when
+# run_results.json exists; locally `make all` stops at a failed transform.
+.PHONY: record-dbt
+record-dbt:
+	@: "$${NEON_DATABASE_URL:?NEON_DATABASE_URL is required}"
+	uv run python -m cyber_threat_pipeline.core.runs
+
 # [phase 4] Analyst brief — spec: _private/specs/04-analysis-llm.md
 # Reads NEON_DATABASE_URL + ANTHROPIC_API_KEY + XAI_API_KEY.
 # Writes markdown into reporting/pages/.
@@ -119,7 +130,7 @@ report:
 		--paths "/*"
 
 .PHONY: all
-all: ingest transform analysis report
+all: ingest transform record-dbt analysis report
 
 # ---------------------------------------------------------------------------
 # Housekeeping

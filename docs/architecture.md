@@ -27,7 +27,7 @@ flowchart TB
         DBT["staging → intermediate → marts<br/>schema + data tests<br/>docs auto-generated"]
     end
 
-    subgraph Reporting["Evidence.dev · Node 20"]
+    subgraph Reporting["Evidence.dev · Node 24"]
         Build["Static site build<br/>single connection-string<br/>env var"]
     end
 
@@ -113,7 +113,7 @@ Every model has schema tests (`not_null`, `unique`, `relationships`) and selecte
 
 ### Reporting — Evidence.dev (`reporting/`)
 
-Evidence v40, Node 20 LTS (pinned in `reporting/.nvmrc`). Three pages today: home (corpus overview), analyst brief (the LLM output), freshness & data quality.
+Evidence v40, Node 24 LTS (pinned in `reporting/.nvmrc`). Three pages today: home (corpus overview), analyst brief (the LLM output), freshness & data quality.
 
 Datasource configuration is intentionally minimal: a single `EVIDENCE_SOURCE__neon__connectionString` env var holds the full Postgres URL. (Per-field env vars cause type-coercion bugs in the postgres adapter — strings can't be cast to ports/booleans cleanly. A connection string sidesteps that.)
 
@@ -150,7 +150,8 @@ The Grafana datasource is the `grafana_ro` Neon role. The dashboard and alerts a
      → INSERT INTO pipeline.runs (stage='ingest', status='ok', rows=…)
 3. make transform
      → dbt build (in isolated env)
-     → INSERT INTO pipeline.runs (stage='transform', dbt_test_outcomes=…)
+   make record-dbt
+     → UPDATE pipeline.runs SET dbt_tests_{passed,failed,skipped}=… (latest row)
 4. make analysis
      → SELECT … FROM marts
      → primary_provider.complete(prompt)  ── Claude in prod
