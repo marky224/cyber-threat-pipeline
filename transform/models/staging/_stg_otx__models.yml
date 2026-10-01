@@ -44,3 +44,9 @@ models:
                 quote: true
               config:
                 severity: warn
+      - name: is_expired
+        description: "Sync-time snapshot (incremental); read live flags from int_indicator_freshness."
+      - name: is_dropped
+        description: "Sync-time snapshot (incremental); read live flags from int_indicator_freshness."
+      - name: is_active
+        description: "Sync-time snapshot (incremental); read live flags from int_indicator_freshness."

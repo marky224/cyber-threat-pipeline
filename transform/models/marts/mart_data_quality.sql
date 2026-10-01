@@ -20,7 +20,7 @@ indicator_stats as (
         sum(case when is_dropped    then 1 else 0 end)                 as dropped_indicators,
         sum(case when pulse_id is null then 1 else 0 end)              as orphan_indicators,
         sum(case when indicator is null then 1 else 0 end)             as null_indicator_value
-    from {{ ref('stg_otx__indicators') }}
+    from {{ ref('int_indicator_freshness') }}
 )
 select
     r.run_id,

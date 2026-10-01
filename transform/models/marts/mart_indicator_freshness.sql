@@ -5,7 +5,7 @@ with bucketed as (
         type,
         case
             when expiration is null                       then 'no_expiration'
-            when is_expired                                then 'expired'
+            when expiration <= now()                       then 'expired'
             when expiration <= now() + interval '30 days'  then 'expiring_le_30d'
             else                                                'active_gt_30d'
         end as freshness_bucket
