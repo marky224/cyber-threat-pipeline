@@ -288,3 +288,12 @@ def test_main_records_counts_on_latest_row(
     assert capsys.readouterr().out.strip() == (
         f"recorded dbt tests on run {run_id}: passed=1 failed=0 skipped=0"
     )
+
+    # Fresh connection: an uncommitted write from main() would not be visible.
+    with psycopg.connect(pg_url) as fresh, fresh.cursor() as cur:
+        cur.execute(
+            "SELECT dbt_tests_passed, dbt_tests_failed, dbt_tests_skipped "
+            "FROM pipeline.runs WHERE id = %s;",
+            (run_id,),
+        )
+        assert cur.fetchone() == (1, 0, 0)
