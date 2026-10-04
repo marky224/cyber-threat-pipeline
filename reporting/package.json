@@ -12,5 +12,16 @@
     "@evidence-dev/evidence": "^40",
     "@evidence-dev/postgres": "^1",
     "@evidence-dev/tailwind": "^3"
+  },
+  "overrides": {
+    "prismjs": "^1.30.0",
+    "nanoid@<3.3.18": "^3.3.18",
+    "nanoid@>=4.0.0 <5.1.16": "^5.1.16",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^9.0.7"
+    },
+    "@sveltejs/kit": {
+      "cookie": "^0.7.0"
+    }
   }
 }
