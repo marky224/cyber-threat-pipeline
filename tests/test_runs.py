@@ -181,7 +181,10 @@ def test_record_dbt_results_writes_counts_to_run_row(
         "results": [
             {"unique_id": "test.foo.not_null_x", "status": "pass"},
             {"unique_id": "test.foo.unique_x", "status": "pass"},
+            {"unique_id": "test.foo.not_null_y", "status": "pass"},
+            {"unique_id": "test.foo.unique_y", "status": "pass"},
             {"unique_id": "test.foo.accepted_y", "status": "fail"},
+            {"unique_id": "test.foo.relationships_y", "status": "fail"},
             {"unique_id": "test.foo.compile_err", "status": "error"},
             {"unique_id": "test.foo.skipped_z", "status": "skipped"},
             {"unique_id": "test.foo.accepted_type", "status": "warn"},
@@ -193,7 +196,7 @@ def test_record_dbt_results_writes_counts_to_run_row(
     p = Path(str(tmp_path)) / "run_results.json"
     p.write_text(json.dumps(results), encoding="utf-8")
 
-    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (2, 2, 1, 2)
+    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (4, 3, 1, 2)
 
     with pg_conn.cursor() as cur:
         cur.execute(
@@ -202,7 +205,7 @@ def test_record_dbt_results_writes_counts_to_run_row(
             (run_id,),
         )
         row = cur.fetchone()
-    assert row == (2, 2, 1, 2)
+    assert row == (4, 3, 1, 2)
 
 
 def test_record_dbt_results_counts_unit_tests(
@@ -277,24 +280,17 @@ def test_main_records_counts_on_latest_row(
     from cyber_threat_pipeline.core.runs import main
 
     run_id = _insert_stale_running(pg_conn, minutes_old=1)
+    # A different count per bucket, so swapping any two of them fails the test.
+    statuses = ["pass"] + ["fail"] * 2 + ["skipped"] * 3 + ["warn"] * 4
+    results = [{"unique_id": f"test.foo.t{i}", "status": s} for i, s in enumerate(statuses)]
     p = Path(str(tmp_path)) / "run_results.json"
-    p.write_text(
-        json.dumps(
-            {
-                "results": [
-                    {"unique_id": "test.foo.not_null_x", "status": "pass"},
-                    {"unique_id": "test.foo.accepted_type", "status": "warn"},
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
+    p.write_text(json.dumps({"results": results}), encoding="utf-8")
 
     monkeypatch.setenv("NEON_DATABASE_URL", pg_url)
     main(results_path=str(p))
 
     assert capsys.readouterr().out.strip() == (
-        f"recorded dbt tests on run {run_id}: passed=1 failed=0 skipped=0 warned=1"
+        f"recorded dbt tests on run {run_id}: passed=1 failed=2 skipped=3 warned=4"
     )
 
     # Fresh connection: an uncommitted write from main() would not be visible.
@@ -304,4 +300,4 @@ def test_main_records_counts_on_latest_row(
             "FROM pipeline.runs WHERE id = %s;",
             (run_id,),
         )
-        assert cur.fetchone() == (1, 0, 0, 1)
+        assert cur.fetchone() == (1, 2, 3, 4)
