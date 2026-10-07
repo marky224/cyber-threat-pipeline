@@ -9,10 +9,13 @@ psql "$NEON_DATABASE_URL" -v ON_ERROR_STOP=1 \
     -f 00_schemas.sql \
     -f 10_raw.sql \
     -f 20_pipeline.sql \
+    -f 21_runs_dbt_tests_warned.sql \
     -f 30_grafana_role.sql
 ```
 
-Re-running is safe and a no-op on tables that already exist.
+Re-running is safe and a no-op on tables that already exist. An existing
+database needs only the files added since it was last applied (for example
+`21_runs_dbt_tests_warned.sql`).
 
 ## Bootstrapping a new Neon database
 

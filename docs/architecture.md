@@ -151,7 +151,7 @@ The Grafana datasource is the `grafana_ro` Neon role. The dashboard and alerts a
 3. make transform
      → dbt build (in isolated env)
    make record-dbt
-     → UPDATE pipeline.runs SET dbt_tests_{passed,failed,skipped}=… (latest row)
+     → UPDATE pipeline.runs SET dbt_tests_{passed,failed,skipped,warned}=… (latest row)
 4. make analysis
      → SELECT … FROM marts
      → primary_provider.complete(prompt)  ── Claude in prod

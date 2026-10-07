@@ -124,6 +124,7 @@ jobs:
             -f sql/00_schemas.sql \
             -f sql/10_raw.sql \
             -f sql/20_pipeline.sql \
+            -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql
 
       - name: Sync app env (frozen) + seed fixture corpus
@@ -201,6 +202,7 @@ jobs:
             -f sql/00_schemas.sql \
             -f sql/10_raw.sql \
             -f sql/20_pipeline.sql \
+            -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql
 
       - name: Sync app env (frozen) + seed fixture corpus

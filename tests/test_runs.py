@@ -184,6 +184,7 @@ def test_record_dbt_results_writes_counts_to_run_row(
             {"unique_id": "test.foo.accepted_y", "status": "fail"},
             {"unique_id": "test.foo.compile_err", "status": "error"},
             {"unique_id": "test.foo.skipped_z", "status": "skipped"},
+            {"unique_id": "test.foo.accepted_type", "status": "warn"},
             # Non-test nodes (models) are ignored.
             {"unique_id": "model.foo.mart_x", "status": "success"},
         ]
@@ -191,17 +192,16 @@ def test_record_dbt_results_writes_counts_to_run_row(
     p = Path(str(tmp_path)) / "run_results.json"
     p.write_text(json.dumps(results), encoding="utf-8")
 
-    passed, failed, skipped = record_dbt_results(pg_conn, run_id=run_id, results_path=str(p))
-    assert (passed, failed, skipped) == (2, 2, 1)
+    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (2, 2, 1, 1)
 
     with pg_conn.cursor() as cur:
         cur.execute(
-            "SELECT dbt_tests_passed, dbt_tests_failed, dbt_tests_skipped "
+            "SELECT dbt_tests_passed, dbt_tests_failed, dbt_tests_skipped, dbt_tests_warned "
             "FROM pipeline.runs WHERE id = %s;",
             (run_id,),
         )
         row = cur.fetchone()
-    assert row == (2, 2, 1)
+    assert row == (2, 2, 1, 1)
 
 
 def test_record_dbt_results_counts_unit_tests(
@@ -226,7 +226,7 @@ def test_record_dbt_results_counts_unit_tests(
     p = Path(str(tmp_path)) / "run_results.json"
     p.write_text(json.dumps(results), encoding="utf-8")
 
-    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (2, 1, 1)
+    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (2, 1, 1, 0)
 
 
 def test_record_dbt_results_handles_empty_results(
@@ -242,7 +242,7 @@ def test_record_dbt_results_handles_empty_results(
     p = Path(str(tmp_path)) / "run_results.json"
     p.write_text(json.dumps({"results": []}), encoding="utf-8")
 
-    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (0, 0, 0)
+    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (0, 0, 0, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -286,14 +286,14 @@ def test_main_records_counts_on_latest_row(
     main(results_path=str(p))
 
     assert capsys.readouterr().out.strip() == (
-        f"recorded dbt tests on run {run_id}: passed=1 failed=0 skipped=0"
+        f"recorded dbt tests on run {run_id}: passed=1 failed=0 skipped=0 warned=0"
     )
 
     # Fresh connection: an uncommitted write from main() would not be visible.
     with psycopg.connect(pg_url) as fresh, fresh.cursor() as cur:
         cur.execute(
-            "SELECT dbt_tests_passed, dbt_tests_failed, dbt_tests_skipped "
+            "SELECT dbt_tests_passed, dbt_tests_failed, dbt_tests_skipped, dbt_tests_warned "
             "FROM pipeline.runs WHERE id = %s;",
             (run_id,),
         )
-        assert cur.fetchone() == (1, 0, 0)
+        assert cur.fetchone() == (1, 0, 0, 0)

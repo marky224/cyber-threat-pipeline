@@ -161,7 +161,7 @@ jobs:
 
       # -------------------------------------------------------------------
       # [phase 7] Record dbt test results into pipeline.runs
-      # Writes dbt_tests_passed/failed/skipped into the latest pipeline.runs
+      # Writes dbt_tests_passed/failed/skipped/warned into the latest pipeline.runs
       # row (opened by ingest). Logic lives in `make record-dbt`.
       #
       # Runs normally after a successful dbt build (a missing

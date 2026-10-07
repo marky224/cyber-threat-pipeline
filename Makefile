@@ -86,7 +86,7 @@ transform:
 	$(MAKE) -C transform build
 
 # [phase 7] Record dbt test counts — spec: _private/specs/07-orchestration.md §3
-# Writes dbt_tests_passed/failed/skipped from transform/target/run_results.json
+# Writes dbt_tests_passed/failed/skipped/warned from transform/target/run_results.json
 # into the latest pipeline.runs row. Reads NEON_DATABASE_URL from the
 # environment (not .env). CI also runs this after a failed dbt build when
 # run_results.json exists; locally `make all` stops at a failed transform.
