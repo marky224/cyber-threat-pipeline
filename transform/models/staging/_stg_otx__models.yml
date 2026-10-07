@@ -44,6 +44,11 @@ models:
                 quote: true
               config:
                 severity: warn
+                # Saves the unexpected type(s) and their row counts to
+                # dbt_test__audit.stg_otx__indicators_type_not_accepted, rebuilt
+                # every run. grafana_ro has no access and no Evidence source reads it.
+                store_failures: true
+                alias: stg_otx__indicators_type_not_accepted
       - name: is_expired
         description: "Sync-time snapshot (incremental); read live flags from int_indicator_freshness."
       - name: is_dropped
