@@ -14,8 +14,9 @@ name: pipeline
 
 on:
   schedule:
-    # Mondays 13:00 UTC — early week, off-peak.
-    - cron: "0 13 * * 1"
+    # Mondays 13:23 UTC — early week, off-peak; off the hour because GitHub
+    # delays or drops top-of-hour schedules.
+    - cron: "23 13 * * 1"
   workflow_dispatch:
     inputs:
       force_full_backfill:

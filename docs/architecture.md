@@ -9,7 +9,7 @@ flowchart TB
     OTX[AlienVault OTX<br/>threat intel feed]
 
     subgraph GH["GitHub Actions"]
-        Cron(["Weekly cron · Mon 09:00 UTC<br/>+ workflow_dispatch"])
+        Cron(["Weekly cron · Mon 13:23 UTC<br/>+ workflow_dispatch"])
     end
 
     subgraph App["Python ETL · uv · Python 3.12"]
@@ -74,7 +74,7 @@ flowchart TB
 **GitHub Actions** — two workflows:
 
 - `ci.yml` runs on every push/PR: lint (ruff), type-check (mypy, strict), unit tests (pytest), gitleaks, dbt build+test, Evidence build, terraform validate.
-- `pipeline.yml` runs weekly (Mon 09:00 UTC) and on manual dispatch: ingest → transform → analyse → publish. This is the *only* mechanism that writes to production Neon or deploys to AWS.
+- `pipeline.yml` runs weekly (Mon 13:23 UTC) and on manual dispatch: ingest → transform → analyse → publish. This is the *only* mechanism that writes to production Neon or deploys to AWS.
 
 No other scheduler exists. The Makefile is the single source of truth for stage commands; both workflows invoke `make <target>`.
 
