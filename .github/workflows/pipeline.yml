@@ -47,7 +47,7 @@ jobs:
   # -------------------------------------------------------------------------
   keepalive:
     name: keepalive
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: write
@@ -59,7 +59,7 @@ jobs:
 
   pipeline:
     name: weekly run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: production
     steps:
