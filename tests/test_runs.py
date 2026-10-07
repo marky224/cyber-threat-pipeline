@@ -185,6 +185,7 @@ def test_record_dbt_results_writes_counts_to_run_row(
             {"unique_id": "test.foo.compile_err", "status": "error"},
             {"unique_id": "test.foo.skipped_z", "status": "skipped"},
             {"unique_id": "test.foo.accepted_type", "status": "warn"},
+            {"unique_id": "test.foo.accepted_tlp", "status": "warn"},
             # Non-test nodes (models) are ignored.
             {"unique_id": "model.foo.mart_x", "status": "success"},
         ]
@@ -192,7 +193,7 @@ def test_record_dbt_results_writes_counts_to_run_row(
     p = Path(str(tmp_path)) / "run_results.json"
     p.write_text(json.dumps(results), encoding="utf-8")
 
-    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (2, 2, 1, 1)
+    assert record_dbt_results(pg_conn, run_id=run_id, results_path=str(p)) == (2, 2, 1, 2)
 
     with pg_conn.cursor() as cur:
         cur.execute(
@@ -201,7 +202,7 @@ def test_record_dbt_results_writes_counts_to_run_row(
             (run_id,),
         )
         row = cur.fetchone()
-    assert row == (2, 2, 1, 1)
+    assert row == (2, 2, 1, 2)
 
 
 def test_record_dbt_results_counts_unit_tests(
@@ -278,7 +279,14 @@ def test_main_records_counts_on_latest_row(
     run_id = _insert_stale_running(pg_conn, minutes_old=1)
     p = Path(str(tmp_path)) / "run_results.json"
     p.write_text(
-        json.dumps({"results": [{"unique_id": "test.foo.not_null_x", "status": "pass"}]}),
+        json.dumps(
+            {
+                "results": [
+                    {"unique_id": "test.foo.not_null_x", "status": "pass"},
+                    {"unique_id": "test.foo.accepted_type", "status": "warn"},
+                ]
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -286,7 +294,7 @@ def test_main_records_counts_on_latest_row(
     main(results_path=str(p))
 
     assert capsys.readouterr().out.strip() == (
-        f"recorded dbt tests on run {run_id}: passed=1 failed=0 skipped=0 warned=0"
+        f"recorded dbt tests on run {run_id}: passed=1 failed=0 skipped=0 warned=1"
     )
 
     # Fresh connection: an uncommitted write from main() would not be visible.
@@ -296,4 +304,4 @@ def test_main_records_counts_on_latest_row(
             "FROM pipeline.runs WHERE id = %s;",
             (run_id,),
         )
-        assert cur.fetchone() == (1, 0, 0, 0)
+        assert cur.fetchone() == (1, 0, 0, 1)
