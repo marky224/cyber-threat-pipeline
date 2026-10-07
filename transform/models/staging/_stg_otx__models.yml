@@ -41,6 +41,7 @@ models:
                   - 'CVE'
                   - 'Mutex'
                   - 'YARA'
+                  - 'BitcoinAddress'
                 quote: true
               config:
                 severity: warn
