@@ -19,7 +19,7 @@ permissions:
 jobs:
   ci:
     name: lint · typecheck · test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     # Postgres service for the phase-2 DB-integration tests
@@ -72,7 +72,7 @@ jobs:
 
   dbt:
     name: dbt build · test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     # Same pattern as the ci job: postgres:15 as a service so dbt can build
@@ -124,6 +124,7 @@ jobs:
             -f sql/00_schemas.sql \
             -f sql/10_raw.sql \
             -f sql/20_pipeline.sql \
+            -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql
 
       - name: Sync app env (frozen) + seed fixture corpus
@@ -141,7 +142,7 @@ jobs:
 
   evidence:
     name: evidence · build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     # Mirrors the dbt job's setup so the Evidence build sees a populated
@@ -201,6 +202,7 @@ jobs:
             -f sql/00_schemas.sql \
             -f sql/10_raw.sql \
             -f sql/20_pipeline.sql \
+            -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql
 
       - name: Sync app env (frozen) + seed fixture corpus
@@ -263,7 +265,7 @@ jobs:
 
   monitoring:
     name: monitoring · validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 3
 
     # YAML + JSON syntactic check only. Doesn't verify Grafana semantics
@@ -319,7 +321,7 @@ jobs:
 
   terraform:
     name: terraform · validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     # HCL-only check: `terraform fmt -check` + `terraform validate`. No

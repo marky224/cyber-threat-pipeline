@@ -265,7 +265,7 @@
       "id": 5,
       "type": "barchart",
       "title": "dbt test results over time",
-      "description": "Stacked bars per run: passed (green), skipped (yellow), failed (red). Red bars trigger alert 4.4.",
+      "description": "Stacked bars per run: passed (green), warned (orange), skipped (yellow), failed (red). Only red bars trigger alert 4.4.",
       "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
       "gridPos": { "x": 0, "y": 21, "w": 12, "h": 9 },
       "fieldConfig": {
@@ -293,6 +293,10 @@
           {
             "matcher": { "id": "byName", "options": "skipped" },
             "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "warned" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }]
           }
         ]
       },
@@ -312,7 +316,7 @@
           "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "select started_at as \"time\", dbt_tests_passed as passed, dbt_tests_failed as failed, dbt_tests_skipped as skipped from pipeline.runs where status in ('success','failed','partial') and $__timeFilter(started_at) order by started_at;"
+          "rawSql": "select started_at as \"time\", dbt_tests_passed as passed, dbt_tests_warned as warned, dbt_tests_failed as failed, dbt_tests_skipped as skipped from pipeline.runs where status in ('success','failed','partial') and $__timeFilter(started_at) order by started_at;"
         }
       ]
     },

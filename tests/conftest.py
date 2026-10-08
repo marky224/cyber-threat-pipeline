@@ -15,7 +15,13 @@ import psycopg
 import pytest
 
 SQL_DIR = Path(__file__).resolve().parent.parent / "sql"
-SQL_FILES = ("00_schemas.sql", "10_raw.sql", "20_pipeline.sql", "30_grafana_role.sql")
+SQL_FILES = (
+    "00_schemas.sql",
+    "10_raw.sql",
+    "20_pipeline.sql",
+    "21_runs_dbt_tests_warned.sql",
+    "30_grafana_role.sql",
+)
 
 
 def _apply_sql(conn: psycopg.Connection) -> None:

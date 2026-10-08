@@ -14,8 +14,9 @@ name: pipeline
 
 on:
   schedule:
-    # Mondays 13:00 UTC — early week, off-peak.
-    - cron: "0 13 * * 1"
+    # Mondays 13:23 UTC — early week, off-peak; off the hour because GitHub
+    # delays or drops top-of-hour schedules.
+    - cron: "23 13 * * 1"
   workflow_dispatch:
     inputs:
       force_full_backfill:
@@ -47,7 +48,7 @@ jobs:
   # -------------------------------------------------------------------------
   keepalive:
     name: keepalive
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: write
@@ -59,7 +60,7 @@ jobs:
 
   pipeline:
     name: weekly run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: production
     steps:
@@ -161,7 +162,7 @@ jobs:
 
       # -------------------------------------------------------------------
       # [phase 7] Record dbt test results into pipeline.runs
-      # Writes dbt_tests_passed/failed/skipped into the latest pipeline.runs
+      # Writes dbt_tests_passed/failed/skipped/warned into the latest pipeline.runs
       # row (opened by ingest). Logic lives in `make record-dbt`.
       #
       # Runs normally after a successful dbt build (a missing

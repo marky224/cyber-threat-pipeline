@@ -150,19 +150,20 @@ def record_dbt_results(
     *,
     run_id: int,
     results_path: str,
-) -> tuple[int, int, int]:
+) -> tuple[int, int, int, int]:
     """Parse dbt's target/run_results.json and write the test counts into pipeline.runs.
 
     Spec: 07-orchestration.md §3 + 03-dbt-transform.md §9. Counts nodes whose
     unique_id starts with "test." (data tests + custom singular tests) or
     "unit_test." (dbt ≥1.8 unit tests); each is counted in exactly one of
-    passed / failed / skipped buckets:
+    passed / failed / skipped / warned buckets:
        - pass    → passed
        - fail    → failed
        - error   → failed (compilation / runtime error — treat as test failure)
        - skipped → skipped
+       - warn    → warned (severity: warn test that matched rows)
 
-    Returns (passed, failed, skipped) so callers can log the totals.
+    Returns (passed, failed, skipped, warned) so callers can log the totals.
     """
     import pathlib
 
@@ -175,6 +176,7 @@ def record_dbt_results(
     passed = sum(1 for r in test_nodes if r.get("status") == "pass")
     failed = sum(1 for r in test_nodes if r.get("status") in ("fail", "error"))
     skipped = sum(1 for r in test_nodes if r.get("status") == "skipped")
+    warned = sum(1 for r in test_nodes if r.get("status") == "warn")
 
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(
@@ -182,20 +184,22 @@ def record_dbt_results(
             UPDATE pipeline.runs SET
               dbt_tests_passed  = %s,
               dbt_tests_failed  = %s,
-              dbt_tests_skipped = %s
+              dbt_tests_skipped = %s,
+              dbt_tests_warned  = %s
              WHERE id = %s;
             """,
-            (passed, failed, skipped, run_id),
+            (passed, failed, skipped, warned, run_id),
         )
 
     logger.info(
-        "Recorded dbt test results for run %d: passed=%d failed=%d skipped=%d",
+        "Recorded dbt test results for run %d: passed=%d failed=%d skipped=%d warned=%d",
         run_id,
         passed,
         failed,
         skipped,
+        warned,
     )
-    return passed, failed, skipped
+    return passed, failed, skipped, warned
 
 
 def main(results_path: str = "transform/target/run_results.json") -> None:
@@ -210,9 +214,12 @@ def main(results_path: str = "transform/target/run_results.json") -> None:
         run_id = latest_run_id(conn)
         if run_id is None:
             sys.exit("no pipeline.runs row to update — ingest step must have failed")
-        passed, failed, skipped = record_dbt_results(conn, run_id=run_id, results_path=results_path)
+        passed, failed, skipped, warned = record_dbt_results(
+            conn, run_id=run_id, results_path=results_path
+        )
         print(
-            f"recorded dbt tests on run {run_id}: passed={passed} failed={failed} skipped={skipped}"
+            f"recorded dbt tests on run {run_id}: "
+            f"passed={passed} failed={failed} skipped={skipped} warned={warned}"
         )
 
 

@@ -57,7 +57,7 @@ The litmus test: *is this about what the data **means** (→ Evidence) or about 
 
 ## How a weekly run executes
 
-Every Monday at 09:00 UTC, [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) walks five stages:
+Every Monday at 13:23 UTC, [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) walks five stages:
 
 1. **Ingest** (`make ingest`) — pulls OTX pulses modified since the watermark in `pipeline.state`, transforms in pandas, idempotently upserts into Neon's `raw` schema. The watermark advances only on success, so failed runs are replayable.
 2. **Transform** (`make transform`) — the isolated dbt env builds 9 marts (staging → intermediate → marts), runs schema + data tests, captures the result for the audit row.
