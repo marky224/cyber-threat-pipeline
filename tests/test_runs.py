@@ -189,8 +189,13 @@ def test_record_dbt_results_writes_counts_to_run_row(
             {"unique_id": "test.foo.skipped_z", "status": "skipped"},
             {"unique_id": "test.foo.accepted_type", "status": "warn"},
             {"unique_id": "test.foo.accepted_tlp", "status": "warn"},
-            # Non-test nodes (models) are ignored.
+            # Non-test nodes are ignored. The error and skipped ones would land in
+            # the failed / skipped buckets if the unique_id filter were dropped,
+            # so this pins the filter (dbt build writes model and seed results
+            # to the same file).
             {"unique_id": "model.foo.mart_x", "status": "success"},
+            {"unique_id": "model.foo.mart_broken", "status": "error"},
+            {"unique_id": "seed.foo.ref_data", "status": "skipped"},
         ]
     }
     p = Path(str(tmp_path)) / "run_results.json"
