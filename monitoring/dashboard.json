@@ -54,7 +54,7 @@
       }
     ]
   },
-  "description": "Cyber Threat Pipeline — operational health. Five panels reading pipeline.runs + marts.mart_data_quality via the grafana_ro role (no raw access).",
+  "description": "Cyber Threat Pipeline — operational health. Five panels reading pipeline.runs + marts.mart_data_quality + marts.mart_data_quality_history via the grafana_ro role (no raw access).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -324,7 +324,7 @@
       "id": 6,
       "type": "timeseries",
       "title": "Data-quality trends",
-      "description": "Indicator-corpus shape over time, joined from pipeline.runs + marts.mart_data_quality. Sudden jumps in orphan_indicators are a data-shape warning; sharp drops in pct_active signal a re-classification.",
+      "description": "Indicator-corpus shape over time, one point per successful run from marts.mart_data_quality_history. Sudden jumps in orphan_indicators are a data-shape warning; sharp drops in pct_active signal a re-classification.",
       "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
       "gridPos": { "x": 12, "y": 21, "w": 12, "h": 9 },
       "fieldConfig": {
@@ -368,7 +368,7 @@
           "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "select r.started_at as \"time\", dq.total_indicators, dq.active_indicators, dq.expired_indicators, dq.dropped_indicators, dq.orphan_indicators, dq.pct_active from pipeline.runs r join marts.mart_data_quality dq on dq.run_id = r.id where $__timeFilter(r.started_at) order by r.started_at;"
+          "rawSql": "select started_at as \"time\", total_indicators, active_indicators, expired_indicators, dropped_indicators, orphan_indicators, pct_active from marts.mart_data_quality_history where $__timeFilter(started_at) order by started_at;"
         }
       ]
     }

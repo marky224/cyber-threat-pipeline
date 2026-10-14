@@ -8,6 +8,7 @@ artifacts, no click-around state lives outside the repo.
 ```
 pipeline.runs         ◄── grafana_ro role ──  Grafana Cloud
 marts.mart_data_quality                       │
+marts.mart_data_quality_history               │
                                               ▼
                                       operator + public-share URL
 ```
@@ -87,6 +88,10 @@ fewer than 2 successful `pipeline.runs` rows, time-series panels render
 as a single dot or empty plot — this is expected (the seed fixture
 only inserts one row). Real-world meaningful rendering kicks in after
 ~2 weekly runs.
+
+Panel 6 ("Data-quality trends") reads `marts.mart_data_quality_history`
+(one row per successful run); re-import the live dashboard only after
+the first pipeline run that includes it has created that table.
 
 ### state-timeline plugin
 
