@@ -107,7 +107,7 @@ dbt Core with the Postgres adapter, in its **own isolated environment** (its own
 
 - `staging/` — light cleanup, renames, type casts on `raw`.
 - `intermediate/` — joins, deduplication, business-logic glue.
-- `marts/` — the 9 published tables Evidence and Grafana query.
+- `marts/` — the 10 published tables Evidence and Grafana query.
 
 Every model has schema tests (`not_null`, `unique`, `relationships`) and selected data tests. `dbt build` runs models and tests in one pass; the captured test result is written into the `pipeline.runs` audit row by the orchestrator.
 

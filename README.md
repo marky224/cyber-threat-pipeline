@@ -60,7 +60,7 @@ The litmus test: *is this about what the data **means** (→ Evidence) or about 
 Every Monday at 13:23 UTC, [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) walks five stages:
 
 1. **Ingest** (`make ingest`) — pulls OTX pulses modified since the watermark in `pipeline.state`, transforms in pandas, idempotently upserts into Neon's `raw` schema. The watermark advances only on success, so failed runs are replayable.
-2. **Transform** (`make transform`) — the isolated dbt env builds 9 marts (staging → intermediate → marts), runs schema + data tests, captures the result for the audit row.
+2. **Transform** (`make transform`) — the isolated dbt env builds 10 marts (staging → intermediate → marts), runs schema + data tests, captures the result for the audit row.
 3. **Analyse** (`make analysis`) — the configured primary + secondary LLM providers each render the same prompt against the current marts; output replaces `reporting/pages/analyst-brief.md` (gitignored, regenerated each run). Claude is the production primary; `ANALYSIS_PRIMARY_PROVIDER` swaps in Grok / GPT / Gemini / local Ollama with no code change.
 4. **Publish** (`make report`) — Evidence builds the static site, syncs to S3 under the GitHub-OIDC deploy role, invalidates CloudFront.
 5. **Audit** — each stage writes a row to `pipeline.runs` with status, row counts, and dbt test outcomes. Grafana reads this table through the read-only `grafana_ro` role; a failure trips the `ctp-run-failure` alert.
@@ -95,7 +95,7 @@ cyber_threat_pipeline/      Python app package
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
 └── analysis/               LLM analyst brief · Claude primary · 5 providers swappable · any 2 side-by-side
 sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
-transform/                  dbt Core (isolated env) · 9 marts · staging → intermediate → marts · schema + data tests
+transform/                  dbt Core (isolated env) · 10 marts · staging → intermediate → marts · schema + data tests
 reporting/                  Evidence.dev (Node 24 LTS) · 3 pages · postgres datasource via single connection-string env
 monitoring/                 Grafana dashboard (5 panels) + alerts (4 rules) as code · no UI state
 infra/                      Terraform · S3 + CloudFront + ACM + Route 53 + GitHub OIDC deploy role · no static AWS keys
