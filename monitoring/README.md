@@ -88,6 +88,8 @@ as a single dot or empty plot — this is expected (the seed fixture
 only inserts one row). Real-world meaningful rendering kicks in after
 ~2 weekly runs.
 
+Panel 6 ("Data-quality trends") reads `marts.mart_data_quality_history` (one row per successful run); re-import the live dashboard only after the first pipeline run that includes it has created that table.
+
 ### state-timeline plugin
 
 Panel 1 ("Run health over time") uses the `state-timeline` panel type.
