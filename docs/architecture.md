@@ -133,7 +133,7 @@ The OIDC provider is a `data` lookup (not a `resource`) so the same Terraform ap
 
 Grafana Cloud free tier. Two artifacts checked into git:
 
-- `dashboard.json` — the operational dashboard (5 panels: run status timeline, rows-ingested-per-run, dbt test pass rate, freshness vs. SLA, error log).
+- `dashboard.json` — the operational dashboard (5 panels: run health over time, ingestion volume and drift, freshness (pipeline and intel), dbt test results over time, data-quality trends).
 - `alerts.yaml` — 4 alert rules (run failure, stale data, dbt test regression, ingest row-count drop), eval interval 900s.
 
 The Grafana datasource is the `grafana_ro` Neon role. The dashboard and alerts are provisioned via the Grafana HTTP API at install time — no UI-edited state. A `<NEON_RO_UID>` placeholder in `alerts.yaml` is substituted at provisioning time from the datasource API response.

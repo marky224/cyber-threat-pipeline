@@ -54,7 +54,7 @@
       }
     ]
   },
-  "description": "Cyber Threat Pipeline — operational health. Six panels reading pipeline.runs + marts.mart_data_quality + marts.mart_data_quality_history via the grafana_ro role (no raw access).",
+  "description": "Cyber Threat Pipeline — operational health. Five panels reading pipeline.runs + marts.mart_data_quality + marts.mart_data_quality_history via the grafana_ro role (no raw access).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
