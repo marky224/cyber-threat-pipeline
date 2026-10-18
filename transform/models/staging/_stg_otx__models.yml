@@ -42,6 +42,12 @@ models:
                   - 'Mutex'
                   - 'YARA'
                   - 'BitcoinAddress'
+                  - 'URI'
+                  - 'FileHash-PEHASH'
+                  - 'FileHash-IMPHASH'
+                  - 'JA3'
+                  - 'osquery'
+                  - 'SSLCertFingerprint'
                 quote: true
               config:
                 severity: warn
