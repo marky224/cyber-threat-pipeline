@@ -1,0 +1,850 @@
+{
+  "generated_at": "2026-10-14 11:11:09.121782+00:00",
+  "corpus_header": {
+    "total_pulses": 751,
+    "total_indicators": 25215,
+    "active_indicators": 24111,
+    "expired_indicators": 1085
+  },
+  "top_types": [
+    {
+      "type": "domain",
+      "count": 8501
+    },
+    {
+      "type": "FileHash-SHA256",
+      "count": 5387
+    },
+    {
+      "type": "hostname",
+      "count": 2956
+    },
+    {
+      "type": "FileHash-MD5",
+      "count": 2849
+    },
+    {
+      "type": "FileHash-SHA1",
+      "count": 2070
+    }
+  ],
+  "top_countries": [
+    {
+      "country": "United States of America",
+      "pulse_count": 81
+    },
+    {
+      "country": "British Indian Ocean Territory",
+      "pulse_count": 38
+    },
+    {
+      "country": "India",
+      "pulse_count": 38
+    },
+    {
+      "country": "Brazil",
+      "pulse_count": 32
+    },
+    {
+      "country": "United Kingdom of Great Britain and Northern Ireland",
+      "pulse_count": 29
+    }
+  ],
+  "top_tags": [
+    {
+      "tag": "credential theft",
+      "pulse_count": 105
+    },
+    {
+      "tag": "social engineering",
+      "pulse_count": 66
+    },
+    {
+      "tag": "clickfix",
+      "pulse_count": 63
+    },
+    {
+      "tag": "infostealer",
+      "pulse_count": 58
+    },
+    {
+      "tag": "phishing",
+      "pulse_count": 56
+    }
+  ],
+  "top_industries": [
+    {
+      "industry": "Technology",
+      "pulse_count": 161
+    },
+    {
+      "industry": "Government",
+      "pulse_count": 152
+    },
+    {
+      "industry": "Finance",
+      "pulse_count": 142
+    },
+    {
+      "industry": "Education",
+      "pulse_count": 69
+    },
+    {
+      "industry": "Healthcare",
+      "pulse_count": 56
+    }
+  ],
+  "emerging_pulses_7d": [
+    {
+      "id": "6accbe14102992eb5a52b063",
+      "name": "The phone was compromised before the user turned it on: the rise of Midnight Mimosa",
+      "tlp": "white",
+      "tags": [
+        "ad fraud",
+        "enloaderlib",
+        "android.phantom",
+        "mediatek platform",
+        "residential proxy",
+        "botnet",
+        "midnight mimosa",
+        "click fraud",
+        "android.joker",
+        "android.click",
+        "system privileges",
+        "android dropper",
+        "preinstalled firmware"
+      ],
+      "targeted_countries": [
+        "United States of America",
+        "Brazil",
+        "France",
+        "Germany",
+        "Italy",
+        "Mexico",
+        "Spain"
+      ],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 301
+    },
+    {
+      "id": "6ace37f3bfe7f0829254f7bf",
+      "name": "Kimsuky attacks targeting Ukrainian experts in diplomacy, security, and international policy",
+      "tlp": "white",
+      "tags": [
+        "operation gitpower",
+        "state-sponsored espionage",
+        "chm attacks",
+        "github abuse",
+        "spear phishing",
+        "lnk files",
+        "powershell",
+        "ukraine targeting"
+      ],
+      "targeted_countries": [
+        "Ukraine"
+      ],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 135
+    },
+    {
+      "id": "6ac9eef4bcc05a59cd402770",
+      "name": "Threat Overview: NetScaler Zero Days CVE-2026-88771 and CVE-2026-88772 Being Exploited in Production Environments (Updated September 30)",
+      "tlp": "white",
+      "tags": [
+        "netscaler",
+        "command injection",
+        "cve-2026-88771",
+        "zero-day exploitation",
+        "remote code execution",
+        "dtls vulnerability",
+        "webshell",
+        "cve-2026-88772"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 23
+    },
+    {
+      "id": "6acf002e7c7fddeb927af2d8",
+      "name": "Statistical Report on Malware Targeting Linux SSH Servers in the Third Quarter of 2026",
+      "tlp": "white",
+      "tags": [
+        "brute force",
+        "linux",
+        "prometei",
+        "mirai",
+        "ssh servers",
+        "cryptomining",
+        "ddos bot",
+        "p2pinfect",
+        "perlbot",
+        "fisieredoor",
+        "gafgyt",
+        "rootkit",
+        "xhide",
+        "shellbot",
+        "xmrig"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 17
+    },
+    {
+      "id": "6accfc98a21fbfce518cceaa",
+      "name": "From WhatsApp to SYSTEM: Inside the VulcanRAT207.A Intrusion Chain",
+      "tlp": "white",
+      "tags": [
+        "whatsapp delivery",
+        "vulcanrat207.a",
+        "system privilege escalation",
+        "dll side-loading",
+        "vulkan persistence",
+        "gofly64.sys",
+        "statement.exe",
+        "websocket rat",
+        "gofly driver",
+        "poolparty injection"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 12
+    },
+    {
+      "id": "6accdd88406e67c287aa23a5",
+      "name": "From Endpoint to Funhouse: Changes in Ransomware Families and Kimsuky-Related Distribution Cases",
+      "tlp": "white",
+      "tags": [
+        "funhouse ransomware",
+        "resume lure",
+        "endpoint",
+        "korean targets",
+        "kimsuky",
+        "quasar rat",
+        "endpoint ransomware",
+        "multi-stage scripts",
+        "hwp document",
+        "funhouse"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 7
+    },
+    {
+      "id": "6acec272f01b1f0cac6ecb2a",
+      "name": "Clean Install, Stolen Creds: Fake WatchGuard VPN Site Serves Genuine Signed Client",
+      "tlp": "white",
+      "tags": [
+        "watchguard impersonation",
+        "signed installer abuse",
+        "fake download site",
+        "seo poisoning",
+        "credential phishing",
+        "browser pop-up",
+        "vpn targeting"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 6
+    },
+    {
+      "id": "6ace7dbf73fb0a8d1beeba9b",
+      "name": "RSVP to Disaster: How One Click Installs a RAT",
+      "tlp": "white",
+      "tags": [
+        "captcha manipulation",
+        "social engineering",
+        "connectwise exploitation",
+        "fake invitation",
+        "remote access trojan",
+        "screenconnect",
+        "phishing campaign",
+        "screenconnect abuse",
+        "holiday-themed attack"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 4
+    },
+    {
+      "id": "6ac9101554900e3ae83df111",
+      "name": "The Scalpel vs. The Sledgehammer: Lessons in Precision Triage from the .conf26 SOC",
+      "tlp": "white",
+      "tags": [
+        "conference network security",
+        "cdn infrastructure",
+        "precision blocking",
+        "dns filtering",
+        "soc operations",
+        "byod threats",
+        "incident response",
+        "ai-assisted triage"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 3
+    },
+    {
+      "id": "6acc3823ee551dd1565f0a27",
+      "name": "Inside a brand deal scam targeting YouTube creators",
+      "tlp": "white",
+      "tags": [
+        "google account compromise",
+        "sso abuse",
+        "social engineering",
+        "youtube creators",
+        "sponsorship scam",
+        "credential theft",
+        "brand impersonation",
+        "phishing campaign"
+      ],
+      "targeted_countries": [
+        "Japan",
+        "Peru"
+      ],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 3
+    },
+    {
+      "id": "6ac964afdcc4acb43c3ef335",
+      "name": "DNS as C2 in Noir, An AI-Developed Crypto Wallet Drainer",
+      "tlp": "white",
+      "tags": [
+        "wallet permissions",
+        "cryptocurrency drainer",
+        "noir",
+        "doh abuse",
+        "ai-developed",
+        "dns over https",
+        "command and control",
+        "dns txt records",
+        "crypto phishing",
+        "cloudflare pages"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-14T11:10:57.826298+00:00",
+      "indicator_count": 2
+    },
+    {
+      "id": "6ac7f9431e9712b6c5e2a6cd",
+      "name": "Suspected TraderTraitor Group Uses Trojanized Terraform Provider to Deliver Cross-Platform Malware",
+      "tlp": "white",
+      "tags": [
+        "flatroof",
+        "roofdeck",
+        "tradertraitor",
+        "nostr"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 24
+    },
+    {
+      "id": "6ac8a46214e2077a0bfe7409",
+      "name": "NEBULA: Seven Fake AI SDK Packages on npm Install a Windows RAT That Needs No DLL",
+      "tlp": "white",
+      "tags": [
+        "npm",
+        "supply chain attack",
+        "hvnc",
+        "NEBULA"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 9
+    },
+    {
+      "id": "6ac74668a88744f8ef47c332",
+      "name": "16 Malicious Firefox Extensions Steal Cryptocurrency Wallet Credentials",
+      "tlp": "white",
+      "tags": [
+        "cryptocurrency",
+        "rabby wallet",
+        "firefox extensions",
+        "phishing",
+        "cloudflare workers",
+        "credential theft",
+        "web3",
+        "okx wallet",
+        "browser extension"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 21
+    },
+    {
+      "id": "6ac84a166254b974f23968a2",
+      "name": "MATCHBOIL: New tricks, same old evil intentions",
+      "tlp": "white",
+      "tags": [
+        "matchboil",
+        "spearphishing",
+        "uac-0099",
+        "lonepage"
+      ],
+      "targeted_countries": [
+        "Ukraine"
+      ],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 17
+    },
+    {
+      "id": "6ac7415f2754c1b2193c9737",
+      "name": "TensorLake npm SDK Compromised in ChainDrop Shai-Hulud Credential-Stealing Attack",
+      "tlp": "white",
+      "tags": [
+        "credential theft",
+        "supply chain attack",
+        "ai infrastructure",
+        "chaindrop",
+        "worm",
+        "npm compromise",
+        "shai-hulud",
+        "persistence mechanism"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 2
+    },
+    {
+      "id": "6ac5f1632c72bc95740deede",
+      "name": "Attackers Target AI Development Platform Langflow",
+      "tlp": "white",
+      "tags": [
+        "cve-2017-9841",
+        "cve-2021-26855",
+        "cve-2018-20062",
+        "cve-2025-55184",
+        "unauthenticated access",
+        "cve-2021-34523",
+        "credential harvesting",
+        "ai platform exploitation",
+        "cve-2026-4020",
+        "cve-2025-29927",
+        "cve-2024-44000",
+        "capability probing",
+        "cve-2022-41082",
+        "cve-2024-4577",
+        "remote code execution",
+        "cve-2025-55182",
+        "cve-2026-0768",
+        "python injection",
+        "langflow"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 16
+    },
+    {
+      "id": "6ac7b505bae48a926c79fefb",
+      "name": "From Guest Complaints to Malware: Blockchain Abuse Targets Hotels",
+      "tlp": "white",
+      "tags": [
+        "netsupport manager rat",
+        "ton blockchain",
+        "purerat",
+        "etherrat",
+        "tonresolver",
+        "blockchain c2",
+        "ethereum abuse"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 15
+    },
+    {
+      "id": "6ac741ed2968234538d416fa",
+      "name": "RMM Tools Being Distributed Through Phishing Attacks (ScreenConnect, FleetDeck, Datto, SimpleHelp, JumpCloud, N-able)",
+      "tlp": "white",
+      "tags": [
+        "n-able",
+        "phishing campaign",
+        "screenconnect",
+        "datto",
+        "pdf lures",
+        "it management abuse",
+        "jumpcloud",
+        "rmm tools",
+        "simplehelp",
+        "fleetdeck",
+        "social engineering",
+        "remote access"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 14
+    },
+    {
+      "id": "6ac6796b14fb153d2a5f5a04",
+      "name": "Phishing Campaign Abuses Microsoft Power BI to Deploy Rogue RMMs",
+      "tlp": "white",
+      "tags": [
+        "scheduled tasks",
+        "screenconnect",
+        "rmm",
+        "persistence",
+        "phishing",
+        "hideul_x64.exe",
+        "browser fingerprinting",
+        "defense evasion",
+        "microsoft power bi"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 13
+    },
+    {
+      "id": "6ac84a1665712fe245b07ce7",
+      "name": "Threat Actors Exploit Critical AhsayCBS Flaws to Drop Webshells and XMRig Cryptominer",
+      "tlp": "white",
+      "tags": [
+        "kernel driver exploitation",
+        "ahsaycbs",
+        "cryptomining",
+        "webshell",
+        "xmrig",
+        "msp targeting"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 13
+    },
+    {
+      "id": "6ac679e7bbe47190f9ffce7a",
+      "name": "FortiBleed Operations Continue Targeting Exposed Systems Leading to Reports of Lockouts",
+      "tlp": "white",
+      "tags": [
+        "fortigate",
+        "credential harvesting",
+        "hashtopolis",
+        "fortibleed",
+        "gpu cracking",
+        "inc/lynx",
+        "fortinet",
+        "payload",
+        "initial access broker",
+        "ssl vpn"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 13
+    },
+    {
+      "id": "6ac778436ef05de8abf44e67",
+      "name": "The state of AI-analysis evasion in malware",
+      "tlp": "white",
+      "tags": [
+        "llm-manipulation",
+        "ai-evasion",
+        "prompt-injection",
+        "hollowclad",
+        "rozeshell",
+        "mantlemaze"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 12
+    },
+    {
+      "id": "6ac614ca291abbad48bc40de",
+      "name": "Akira Ransomware Attack Investigation",
+      "tlp": "white",
+      "tags": [
+        "data exfiltration",
+        "antivirus evasion",
+        "rclone",
+        "ransomware",
+        "rdp",
+        "persistence",
+        "akira",
+        "gost tunnel",
+        "gost"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 3
+    },
+    {
+      "id": "6ac8a22f8d0ad1ea5f056ddc",
+      "name": "Unknown Threat Actor Uses AI-Driven ARTEX to Target South Korean Finance",
+      "tlp": "white",
+      "tags": [
+        "llm-powered attacks",
+        "agentic ai",
+        "artex"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 11
+    },
+    {
+      "id": "6ac84a155bb626a3710179b9",
+      "name": "US disrupts Chinese hacking tools as 7 govts warn of PRC spies stealing sensitive data worldwide",
+      "tlp": "white",
+      "tags": [
+        "microscan",
+        "integrity technology group",
+        "vulnerability scanning",
+        "flax typhoon",
+        "fishhub"
+      ],
+      "targeted_countries": [
+        "United States of America",
+        "Japan",
+        "Poland",
+        "Taiwan"
+      ],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 11
+    },
+    {
+      "id": "6ac6369136830294944bbdc8",
+      "name": "Behind the Connect Button: The Fake AI Ads Campaign",
+      "tlp": "white",
+      "tags": [
+        "socket.io",
+        "social engineering",
+        "phishing campaign",
+        "mfa bypass",
+        "browser-in-the-browser",
+        "credential theft",
+        "advertising accounts",
+        "ai impersonation"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 108
+    },
+    {
+      "id": "6ac4285a7c6e1cd492e8b2cf",
+      "name": "ClingSTUN Linux Backdoor Abuses Public STUN Infrastructure",
+      "tlp": "white",
+      "tags": [
+        "cve-2024-32314",
+        "proxy botnet",
+        "cve-2026-87827",
+        "cve-2023-41011",
+        "cve-2021-35394",
+        "cve-2024-21887",
+        "cve-2022-35555",
+        "cve-2014-8361",
+        "cve-2024-7029",
+        "cve-2024-46048",
+        "cve-2024-32292",
+        "cve-2019-17621",
+        "stun abuse",
+        "cve-2016-20016",
+        "cve-2024-23624",
+        "iot exploitation",
+        "cve-2025-67038",
+        "persistence mechanisms",
+        "cve-2024-32281",
+        "cve-2022-37055",
+        "linux backdoor",
+        "cve-2024-35340",
+        "cve-2022-26289",
+        "cve-2024-10914",
+        "clingstun",
+        "cve-2022-36553",
+        "cve-2019-7256",
+        "cve-2026-36356",
+        "router compromise",
+        "cve-2024-23625",
+        "cve-2024-3721",
+        "cve-2023-26801",
+        "cve-2023-1389",
+        "cve-2025-34035",
+        "cve-2023-46805",
+        "cve-2025-34037",
+        "nat traversal",
+        "cve-2024-10915",
+        "cve-2021-36380"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 83
+    },
+    {
+      "id": "6ac89a6e10be1d80cdf57417",
+      "name": "Warden Stealer: The Rapid Rise of an Infostealer with an Appetite for AI Agent Data",
+      "tlp": "white",
+      "tags": [
+        "callbackbeaver",
+        "warden stealer",
+        "obfuscation",
+        "vidar",
+        "goflateloader",
+        "amatera",
+        "maas",
+        "remus"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 77
+    },
+    {
+      "id": "6ac6bb9b4a8df7d9c471fc83",
+      "name": "Inside PhantomPolia: Remus Stealer Delivery via Donut Shellcode in ClickFix Campaign",
+      "tlp": "white",
+      "tags": [
+        "phantompolia",
+        "remus stealer",
+        "clickfix",
+        "ethereum sepolia",
+        "powershell",
+        "information stealer",
+        "autoit",
+        "donut shellcode",
+        "cryptocurrency wallets"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 71
+    },
+    {
+      "id": "6ac4b1c8431cd87d87aa1784",
+      "name": "Lunex Uses BYOVD to Disable Security Monitoring and Deploy Persistent Stealer",
+      "tlp": "white",
+      "tags": [
+        "byovd",
+        "lunexstealer",
+        "cve-2023-20598",
+        "pdfwkrnl.sys",
+        "kernel callback manipulation",
+        "cryptocurrency wallet theft",
+        "native messaging host persistence",
+        "amd driver vulnerability",
+        "endpoint security evasion",
+        "lunexloader",
+        "credential stealer",
+        "ukrainian targeting"
+      ],
+      "targeted_countries": [
+        "Ukraine"
+      ],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 37
+    },
+    {
+      "id": "6ac52c8896a61ee777d4aee5",
+      "name": "Beyond valid credentials: How exposed AWS keys are tested for Amazon Bedrock access",
+      "tlp": "white",
+      "tags": [
+        "amazon bedrock",
+        "credential validation",
+        "anthropic claude",
+        "token-jacking",
+        "credential harvesting",
+        "cloud security",
+        "llm",
+        "aws"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 36
+    },
+    {
+      "id": "6ac6bb9cd16a3898ced29ead",
+      "name": "DarkSword/Coruna Open Directory Finding",
+      "tlp": "white",
+      "tags": [
+        "ghostsaber",
+        "china-based operator",
+        "cve-2026-31001",
+        "darksword",
+        "ios exploitation",
+        "exploitation-as-a-service",
+        "ghostblade",
+        "bip39 recovery phrases",
+        "cve-2025-31200",
+        "ghostknife",
+        "cryptocurrency wallet theft",
+        "open directory",
+        "cve-2025-24201",
+        "coruna"
+      ],
+      "targeted_countries": [],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 32
+    },
+    {
+      "id": "6ac6152430b84019d1fded71",
+      "name": "Iranian State-Aligned Threat Actor Masquerading as Dubai Airports IT Department Delivering Trojanized Coding Challenges - Blinder Tunnel Campaign Targeting Iraqi Critical Infrastructure",
+      "tlp": "white",
+      "tags": [
+        "appdomainmanager hijacking",
+        "blackwood.dll",
+        "blinder tunnel",
+        "chisel",
+        "dll sideloading",
+        "shelbyloader v2",
+        "iraqi critical infrastructure",
+        "runtimebroker.dll",
+        "github c2",
+        "iranian threat actor",
+        "psproxy.dll",
+        "dubai airports impersonation"
+      ],
+      "targeted_countries": [
+        "Iraq",
+        "Israel"
+      ],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 32
+    },
+    {
+      "id": "6ac7794a227de27b373a9281",
+      "name": "Canto incognito: tracking the PoeLLM malware",
+      "tlp": "white",
+      "tags": [
+        "cryptocurrency mining",
+        "ai infrastructure targeting",
+        "poellm",
+        "botnet",
+        "gotenberg",
+        "ollama",
+        "xmrig",
+        "cve-2026-10520",
+        "litellm exploitation"
+      ],
+      "targeted_countries": [
+        "United States of America"
+      ],
+      "first_seen_at": "2026-10-12T18:40:40.806282+00:00",
+      "indicator_count": 25
+    }
+  ],
+  "emerging_indicators_7d": [
+    {
+      "type": "FileHash-MD5",
+      "count": 285
+    },
+    {
+      "type": "domain",
+      "count": 228
+    },
+    {
+      "type": "FileHash-SHA256",
+      "count": 222
+    },
+    {
+      "type": "FileHash-SHA1",
+      "count": 129
+    },
+    {
+      "type": "IPv4",
+      "count": 108
+    },
+    {
+      "type": "hostname",
+      "count": 56
+    },
+    {
+      "type": "URL",
+      "count": 50
+    },
+    {
+      "type": "CVE",
+      "count": 49
+    }
+  ]
+}

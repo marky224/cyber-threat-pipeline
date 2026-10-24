@@ -197,6 +197,10 @@ jobs:
           # required for the ingestion path).
           OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
           ANALYSIS_PROVIDERS: ${{ vars.ANALYSIS_PROVIDERS || 'claude' }}
+          # Optional claim-level judge (analysis/judge.py): unset = off;
+          # 'claude' (Haiku) or 'local' only. Repository Variables, not Secrets.
+          ANALYSIS_JUDGE: ${{ vars.ANALYSIS_JUDGE || '' }}
+          JUDGE_MODEL: ${{ vars.JUDGE_MODEL || '' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

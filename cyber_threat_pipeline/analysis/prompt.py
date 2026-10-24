@@ -81,7 +81,9 @@ def build_prompt(brief: dict[str, Any]) -> str:
     emerging_pulses = brief["emerging_pulses_7d"] or []
     emerging_indicators = brief["emerging_indicators_7d"] or []
 
-    emerging_block = _fmt_emerging_pulses(emerging_pulses)
+    # Indent the block's continuation lines to the template's 8 spaces so the
+    # dedent below strips the template indent, not just the common minimum.
+    emerging_block = _fmt_emerging_pulses(emerging_pulses).replace("\n", "\n" + " " * 8)
 
     body = textwrap.dedent(f"""\
         You are a threat-intelligence analyst. Produce a concise brief on the current
@@ -104,17 +106,28 @@ def build_prompt(brief: dict[str, Any]) -> str:
         {emerging_block}
 
         ## What to produce
-        Write a 250-400-word brief with:
-        1. **Headline** (one sentence on the week's most notable signal).
-        2. **Emerging threats** (3-5 bullets on the new pulses — group by theme: ransomware,
-           phishing, APT, supply chain, etc. — and cite pulse names).
-        3. **Corpus-level shifts** (1-3 bullets on changes from the stable picture: a
-           newly-targeted country, a TLP-distribution shift, a tag spike).
-        4. **Analyst caveats** (1-2 bullets on what this data can NOT tell us:
-           attribution confidence, victim impact, dwell time, sampling bias from OTX
-           subscriptions).
+        Write a brief of 250-400 words, headings included; never more than 400.
+        Use exactly these four markdown headings, in this order, each on its own line,
+        and no other "##" headings (a "# " title line above them is fine):
+        - "## Headline": one sentence on the week's most notable signal.
+        - "## Emerging threats": 3-5 bullets on the new pulses — group by theme:
+          ransomware, phishing, APT, supply chain, etc. — and cite pulse names. End
+          every bullet with the id of each pulse it draws on, written as (id=<pulse id>).
+        - "## Contrast with the corpus": 1-3 bullets on how this week's pulses differ
+          from the corpus top-5 lists above, e.g. a country, tag or industry that is
+          absent from them.
+        - "## Analyst caveats": 1-2 bullets on what this data can NOT tell us:
+          attribution confidence, victim impact, dwell time, sampling bias from OTX
+          subscriptions.
 
         Use markdown. Do not invent indicators, pulse names, or numbers — work strictly
-        from what's above.
+        from what's above:
+        - The data has no previous-week figures, so do not call anything a spike, surge,
+          rise, drop or shift, and do not compare this week with earlier ones.
+        - Copy every number from the data above, or count items you name in the same
+          sentence. Do not add up counts across pulses, and do not group countries
+          into regions unless you list them.
+        - When you quote a pulse name, copy it exactly.
+        - If the data can't support a point, say "not in the data" instead of estimating.
         """)
     return body.strip()

@@ -1,0 +1,136 @@
+You are a threat-intelligence analyst. Produce a concise brief on the current
+      state of the AlienVault OTX corpus, focusing on **emerging threats from the
+      last 7 days**.
+
+      ## Corpus context (as of 2026-10-14 11:11:09.121782+00:00)
+      - Total pulses:                 751
+      - Total indicators:             25,215
+      - Active indicators:            24,111  (active = not expired AND not dropped from its pulse)
+      - Expired indicators:           1,085
+      - Top 5 indicator types:        domain: 8501, FileHash-SHA256: 5387, hostname: 2956, FileHash-MD5: 2849, FileHash-SHA1: 2070
+      - Top 5 targeted countries:     United States of America: 81, British Indian Ocean Territory: 38, India: 38, Brazil: 32, United Kingdom of Great Britain and Northern Ireland: 29
+      - Top 5 tags:                   credential theft: 105, social engineering: 66, clickfix: 63, infostealer: 58, phishing: 56
+      - Top 5 targeted industries:    Technology: 161, Government: 152, Finance: 142, Education: 69, Healthcare: 56
+
+      ## Emerging in the last 7 days
+      Indicator types newly seen:     FileHash-MD5: 285, domain: 228, FileHash-SHA256: 222, FileHash-SHA1: 129, IPv4: 108, hostname: 56, URL: 50, CVE: 49
+      New pulses (first_seen_at within 7d):
+        - [WHITE] The phone was compromised before the user turned it on: the rise of Midnight Mimosa (id=6accbe14102992eb5a52b063, indicators=301, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: ad fraud, enloaderlib, android.phantom, mediatek platform, residential proxy, botnet, midnight mimosa, click fraud, android.joker, android.click, system privileges, android dropper, preinstalled firmware
+    countries: United States of America, Brazil, France, Germany, Italy, Mexico, Spain
+- [WHITE] Kimsuky attacks targeting Ukrainian experts in diplomacy, security, and international policy (id=6ace37f3bfe7f0829254f7bf, indicators=135, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: operation gitpower, state-sponsored espionage, chm attacks, github abuse, spear phishing, lnk files, powershell, ukraine targeting
+    countries: Ukraine
+- [WHITE] Threat Overview: NetScaler Zero Days CVE-2026-88771 and CVE-2026-88772 Being Exploited in Production Environments (Updated September 30) (id=6ac9eef4bcc05a59cd402770, indicators=23, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: netscaler, command injection, cve-2026-88771, zero-day exploitation, remote code execution, dtls vulnerability, webshell, cve-2026-88772
+    countries: —
+- [WHITE] Statistical Report on Malware Targeting Linux SSH Servers in the Third Quarter of 2026 (id=6acf002e7c7fddeb927af2d8, indicators=17, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: brute force, linux, prometei, mirai, ssh servers, cryptomining, ddos bot, p2pinfect, perlbot, fisieredoor, gafgyt, rootkit, xhide, shellbot, xmrig
+    countries: —
+- [WHITE] From WhatsApp to SYSTEM: Inside the VulcanRAT207.A Intrusion Chain (id=6accfc98a21fbfce518cceaa, indicators=12, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: whatsapp delivery, vulcanrat207.a, system privilege escalation, dll side-loading, vulkan persistence, gofly64.sys, statement.exe, websocket rat, gofly driver, poolparty injection
+    countries: —
+- [WHITE] From Endpoint to Funhouse: Changes in Ransomware Families and Kimsuky-Related Distribution Cases (id=6accdd88406e67c287aa23a5, indicators=7, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: funhouse ransomware, resume lure, endpoint, korean targets, kimsuky, quasar rat, endpoint ransomware, multi-stage scripts, hwp document, funhouse
+    countries: —
+- [WHITE] Clean Install, Stolen Creds: Fake WatchGuard VPN Site Serves Genuine Signed Client (id=6acec272f01b1f0cac6ecb2a, indicators=6, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: watchguard impersonation, signed installer abuse, fake download site, seo poisoning, credential phishing, browser pop-up, vpn targeting
+    countries: —
+- [WHITE] RSVP to Disaster: How One Click Installs a RAT (id=6ace7dbf73fb0a8d1beeba9b, indicators=4, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: captcha manipulation, social engineering, connectwise exploitation, fake invitation, remote access trojan, screenconnect, phishing campaign, screenconnect abuse, holiday-themed attack
+    countries: —
+- [WHITE] The Scalpel vs. The Sledgehammer: Lessons in Precision Triage from the .conf26 SOC (id=6ac9101554900e3ae83df111, indicators=3, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: conference network security, cdn infrastructure, precision blocking, dns filtering, soc operations, byod threats, incident response, ai-assisted triage
+    countries: —
+- [WHITE] Inside a brand deal scam targeting YouTube creators (id=6acc3823ee551dd1565f0a27, indicators=3, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: google account compromise, sso abuse, social engineering, youtube creators, sponsorship scam, credential theft, brand impersonation, phishing campaign
+    countries: Japan, Peru
+- [WHITE] DNS as C2 in Noir, An AI-Developed Crypto Wallet Drainer (id=6ac964afdcc4acb43c3ef335, indicators=2, first_seen=2026-10-14T11:10:57.826298+00:00)
+    tags: wallet permissions, cryptocurrency drainer, noir, doh abuse, ai-developed, dns over https, command and control, dns txt records, crypto phishing, cloudflare pages
+    countries: —
+- [WHITE] Suspected TraderTraitor Group Uses Trojanized Terraform Provider to Deliver Cross-Platform Malware (id=6ac7f9431e9712b6c5e2a6cd, indicators=24, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: flatroof, roofdeck, tradertraitor, nostr
+    countries: —
+- [WHITE] NEBULA: Seven Fake AI SDK Packages on npm Install a Windows RAT That Needs No DLL (id=6ac8a46214e2077a0bfe7409, indicators=9, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: npm, supply chain attack, hvnc, NEBULA
+    countries: —
+- [WHITE] 16 Malicious Firefox Extensions Steal Cryptocurrency Wallet Credentials (id=6ac74668a88744f8ef47c332, indicators=21, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: cryptocurrency, rabby wallet, firefox extensions, phishing, cloudflare workers, credential theft, web3, okx wallet, browser extension
+    countries: —
+- [WHITE] MATCHBOIL: New tricks, same old evil intentions (id=6ac84a166254b974f23968a2, indicators=17, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: matchboil, spearphishing, uac-0099, lonepage
+    countries: Ukraine
+- [WHITE] TensorLake npm SDK Compromised in ChainDrop Shai-Hulud Credential-Stealing Attack (id=6ac7415f2754c1b2193c9737, indicators=2, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: credential theft, supply chain attack, ai infrastructure, chaindrop, worm, npm compromise, shai-hulud, persistence mechanism
+    countries: —
+- [WHITE] Attackers Target AI Development Platform Langflow (id=6ac5f1632c72bc95740deede, indicators=16, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: cve-2017-9841, cve-2021-26855, cve-2018-20062, cve-2025-55184, unauthenticated access, cve-2021-34523, credential harvesting, ai platform exploitation, cve-2026-4020, cve-2025-29927, cve-2024-44000, capability probing, cve-2022-41082, cve-2024-4577, remote code execution, cve-2025-55182, cve-2026-0768, python injection, langflow
+    countries: —
+- [WHITE] From Guest Complaints to Malware: Blockchain Abuse Targets Hotels (id=6ac7b505bae48a926c79fefb, indicators=15, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: netsupport manager rat, ton blockchain, purerat, etherrat, tonresolver, blockchain c2, ethereum abuse
+    countries: —
+- [WHITE] RMM Tools Being Distributed Through Phishing Attacks (ScreenConnect, FleetDeck, Datto, SimpleHelp, JumpCloud, N-able) (id=6ac741ed2968234538d416fa, indicators=14, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: n-able, phishing campaign, screenconnect, datto, pdf lures, it management abuse, jumpcloud, rmm tools, simplehelp, fleetdeck, social engineering, remote access
+    countries: —
+- [WHITE] Phishing Campaign Abuses Microsoft Power BI to Deploy Rogue RMMs (id=6ac6796b14fb153d2a5f5a04, indicators=13, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: scheduled tasks, screenconnect, rmm, persistence, phishing, hideul_x64.exe, browser fingerprinting, defense evasion, microsoft power bi
+    countries: —
+- [WHITE] Threat Actors Exploit Critical AhsayCBS Flaws to Drop Webshells and XMRig Cryptominer (id=6ac84a1665712fe245b07ce7, indicators=13, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: kernel driver exploitation, ahsaycbs, cryptomining, webshell, xmrig, msp targeting
+    countries: —
+- [WHITE] FortiBleed Operations Continue Targeting Exposed Systems Leading to Reports of Lockouts (id=6ac679e7bbe47190f9ffce7a, indicators=13, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: fortigate, credential harvesting, hashtopolis, fortibleed, gpu cracking, inc/lynx, fortinet, payload, initial access broker, ssl vpn
+    countries: —
+- [WHITE] The state of AI-analysis evasion in malware (id=6ac778436ef05de8abf44e67, indicators=12, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: llm-manipulation, ai-evasion, prompt-injection, hollowclad, rozeshell, mantlemaze
+    countries: —
+- [WHITE] Akira Ransomware Attack Investigation (id=6ac614ca291abbad48bc40de, indicators=3, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: data exfiltration, antivirus evasion, rclone, ransomware, rdp, persistence, akira, gost tunnel, gost
+    countries: —
+- [WHITE] Unknown Threat Actor Uses AI-Driven ARTEX to Target South Korean Finance (id=6ac8a22f8d0ad1ea5f056ddc, indicators=11, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: llm-powered attacks, agentic ai, artex
+    countries: —
+- [WHITE] US disrupts Chinese hacking tools as 7 govts warn of PRC spies stealing sensitive data worldwide (id=6ac84a155bb626a3710179b9, indicators=11, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: microscan, integrity technology group, vulnerability scanning, flax typhoon, fishhub
+    countries: United States of America, Japan, Poland, Taiwan
+- [WHITE] Behind the Connect Button: The Fake AI Ads Campaign (id=6ac6369136830294944bbdc8, indicators=108, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: socket.io, social engineering, phishing campaign, mfa bypass, browser-in-the-browser, credential theft, advertising accounts, ai impersonation
+    countries: —
+- [WHITE] ClingSTUN Linux Backdoor Abuses Public STUN Infrastructure (id=6ac4285a7c6e1cd492e8b2cf, indicators=83, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: cve-2024-32314, proxy botnet, cve-2026-87827, cve-2023-41011, cve-2021-35394, cve-2024-21887, cve-2022-35555, cve-2014-8361, cve-2024-7029, cve-2024-46048, cve-2024-32292, cve-2019-17621, stun abuse, cve-2016-20016, cve-2024-23624, iot exploitation, cve-2025-67038, persistence mechanisms, cve-2024-32281, cve-2022-37055, linux backdoor, cve-2024-35340, cve-2022-26289, cve-2024-10914, clingstun, cve-2022-36553, cve-2019-7256, cve-2026-36356, router compromise, cve-2024-23625, cve-2024-3721, cve-2023-26801, cve-2023-1389, cve-2025-34035, cve-2023-46805, cve-2025-34037, nat traversal, cve-2024-10915, cve-2021-36380
+    countries: —
+- [WHITE] Warden Stealer: The Rapid Rise of an Infostealer with an Appetite for AI Agent Data (id=6ac89a6e10be1d80cdf57417, indicators=77, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: callbackbeaver, warden stealer, obfuscation, vidar, goflateloader, amatera, maas, remus
+    countries: —
+- [WHITE] Inside PhantomPolia: Remus Stealer Delivery via Donut Shellcode in ClickFix Campaign (id=6ac6bb9b4a8df7d9c471fc83, indicators=71, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: phantompolia, remus stealer, clickfix, ethereum sepolia, powershell, information stealer, autoit, donut shellcode, cryptocurrency wallets
+    countries: —
+- [WHITE] Lunex Uses BYOVD to Disable Security Monitoring and Deploy Persistent Stealer (id=6ac4b1c8431cd87d87aa1784, indicators=37, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: byovd, lunexstealer, cve-2023-20598, pdfwkrnl.sys, kernel callback manipulation, cryptocurrency wallet theft, native messaging host persistence, amd driver vulnerability, endpoint security evasion, lunexloader, credential stealer, ukrainian targeting
+    countries: Ukraine
+- [WHITE] Beyond valid credentials: How exposed AWS keys are tested for Amazon Bedrock access (id=6ac52c8896a61ee777d4aee5, indicators=36, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: amazon bedrock, credential validation, anthropic claude, token-jacking, credential harvesting, cloud security, llm, aws
+    countries: —
+- [WHITE] DarkSword/Coruna Open Directory Finding (id=6ac6bb9cd16a3898ced29ead, indicators=32, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: ghostsaber, china-based operator, cve-2026-31001, darksword, ios exploitation, exploitation-as-a-service, ghostblade, bip39 recovery phrases, cve-2025-31200, ghostknife, cryptocurrency wallet theft, open directory, cve-2025-24201, coruna
+    countries: —
+- [WHITE] Iranian State-Aligned Threat Actor Masquerading as Dubai Airports IT Department Delivering Trojanized Coding Challenges - Blinder Tunnel Campaign Targeting Iraqi Critical Infrastructure (id=6ac6152430b84019d1fded71, indicators=32, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: appdomainmanager hijacking, blackwood.dll, blinder tunnel, chisel, dll sideloading, shelbyloader v2, iraqi critical infrastructure, runtimebroker.dll, github c2, iranian threat actor, psproxy.dll, dubai airports impersonation
+    countries: Iraq, Israel
+- [WHITE] Canto incognito: tracking the PoeLLM malware (id=6ac7794a227de27b373a9281, indicators=25, first_seen=2026-10-12T18:40:40.806282+00:00)
+    tags: cryptocurrency mining, ai infrastructure targeting, poellm, botnet, gotenberg, ollama, xmrig, cve-2026-10520, litellm exploitation
+    countries: United States of America
+
+      ## What to produce
+      Write a 250-400-word brief with:
+      1. **Headline** (one sentence on the week's most notable signal).
+      2. **Emerging threats** (3-5 bullets on the new pulses — group by theme: ransomware,
+         phishing, APT, supply chain, etc. — and cite pulse names).
+      3. **Corpus-level shifts** (1-3 bullets on changes from the stable picture: a
+         newly-targeted country, a TLP-distribution shift, a tag spike).
+      4. **Analyst caveats** (1-2 bullets on what this data can NOT tell us:
+         attribution confidence, victim impact, dwell time, sampling bias from OTX
+         subscriptions).
+
+      Use markdown. Do not invent indicators, pulse names, or numbers — work strictly
+      from what's above.

@@ -8,11 +8,14 @@ are skipped if the URL isn't set.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import psycopg
 import pytest
+from anthropic.types import TextBlock
 
 SQL_DIR = Path(__file__).resolve().parent.parent / "sql"
 SQL_FILES = (
@@ -21,6 +24,7 @@ SQL_FILES = (
     "20_pipeline.sql",
     "21_runs_dbt_tests_warned.sql",
     "30_grafana_role.sql",
+    "31_brief_evals.sql",
 )
 
 
@@ -65,3 +69,42 @@ def _pg_session(pg_url: str) -> Iterator[psycopg.Connection]:
 def pg_conn(_pg_session: psycopg.Connection) -> Iterator[psycopg.Connection]:
     _truncate(_pg_session)
     yield _pg_session
+
+
+class FakeJudgeClient:
+    """Stands in for ``anthropic.Anthropic`` inside analysis/judge.py. No network.
+
+    ``inits`` records the client's constructor kwargs, ``requests`` each
+    ``messages.create`` call. ``reply`` is the text returned, or an exception
+    to raise.
+    """
+
+    def __init__(self, reply: str | Exception) -> None:
+        self.reply = reply
+        self.inits: list[dict[str, Any]] = []
+        self.requests: list[dict[str, Any]] = []
+        self.messages = self
+
+    def __call__(self, **kwargs: Any) -> FakeJudgeClient:
+        self.inits.append(kwargs)
+        return self
+
+    def create(self, **kwargs: Any) -> SimpleNamespace:
+        self.requests.append(kwargs)
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        return SimpleNamespace(content=[TextBlock(type="text", text=self.reply)])
+
+
+@pytest.fixture()
+def fake_judge_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[str | Exception], FakeJudgeClient]:
+    """Install a FakeJudgeClient as the judge's Anthropic client; returns it."""
+
+    def install(reply: str | Exception) -> FakeJudgeClient:
+        fake = FakeJudgeClient(reply)
+        monkeypatch.setattr("cyber_threat_pipeline.analysis.judge.anthropic.Anthropic", fake)
+        return fake
+
+    return install

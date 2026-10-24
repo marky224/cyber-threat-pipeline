@@ -8,7 +8,7 @@ returned by ``psycopg.connect`` is a stub that yields a fixture brief row.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -17,6 +17,7 @@ import pytest
 
 from cyber_threat_pipeline.analysis import __main__ as orchestrator
 from cyber_threat_pipeline.analysis import providers as providers_mod
+from tests.conftest import FakeJudgeClient
 
 
 @pytest.fixture(autouse=True)
@@ -44,6 +45,8 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LOCAL_NUM_CTX",
         "OTX_API_KEY",
         "NEON_DATABASE_URL",
+        "ANALYSIS_JUDGE",
+        "JUDGE_MODEL",
     ):
         monkeypatch.delenv(key, raising=False)
     # Disable Pydantic-Settings' .env file reader at the class-config level.
@@ -212,6 +215,117 @@ def test_prompt_is_round_tripped_in_details(
     fence_end = content.index("```", fence_start + len(open_fence))
     rendered = content[fence_start + len(open_fence) : fence_end].strip("\n")
     assert rendered == sent.strip("\n")
+
+
+# ---------------------------------------------------------------------------
+# Grounding checks (cyber_threat_pipeline.analysis.eval)
+# ---------------------------------------------------------------------------
+
+
+def test_each_provider_block_gets_a_grounding_line(
+    monkeypatch: pytest.MonkeyPatch,
+    patch_db_and_prompt: None,
+    output_page: Path,
+) -> None:
+    _patch_provider_query(monkeypatch, "claude", lambda _p, **_kw: "Eleven things happened.")
+    _patch_provider_query(monkeypatch, "grok", lambda _p, **_kw: "grok body")
+
+    rc = orchestrator.run(
+        cfg=_settings(
+            ANALYSIS_PROVIDERS="claude,grok",
+            ANTHROPIC_API_KEY="sk-ant-test",
+            XAI_API_KEY="xai-test",
+        )
+    )
+    assert rc == 0
+
+    content = output_page.read_text(encoding="utf-8")
+    # "Eleven" is not in the stub brief_input; "grok body" has nothing to check.
+    assert "_Grounding: 0/1 facts verified by automated checks._\n\nEleven things" in content
+    assert "_Grounding: 0/0 facts verified by automated checks._\n\ngrok body" in content
+
+
+def test_failed_provider_gets_no_grounding_line(
+    monkeypatch: pytest.MonkeyPatch,
+    patch_db_and_prompt: None,
+    output_page: Path,
+) -> None:
+    def failing_claude(_prompt: str, **_kw: Any) -> str:
+        raise RuntimeError("upstream 503")
+
+    _patch_provider_query(monkeypatch, "claude", failing_claude)
+    _patch_provider_query(monkeypatch, "grok", lambda _p, **_kw: "grok body")
+
+    orchestrator.run(
+        cfg=_settings(
+            ANALYSIS_PROVIDERS="claude,grok",
+            ANTHROPIC_API_KEY="sk-ant-test",
+            XAI_API_KEY="xai-test",
+        )
+    )
+
+    content = output_page.read_text(encoding="utf-8")
+    assert content.count("Grounding:") == 1
+
+
+def test_eval_crash_never_blocks_the_page(
+    monkeypatch: pytest.MonkeyPatch,
+    patch_db_and_prompt: None,
+    output_page: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def broken_eval(*_a: Any, **_kw: Any) -> Any:
+        raise ValueError("eval bug")
+
+    monkeypatch.setattr("cyber_threat_pipeline.analysis.__main__.eval_mod.evaluate", broken_eval)
+    _patch_provider_query(monkeypatch, "local", lambda _p, **_kw: "local body")
+
+    rc = orchestrator.run(cfg=_settings())
+
+    assert rc == 0
+    content = output_page.read_text(encoding="utf-8")
+    assert "local body" in content
+    assert "Grounding:" not in content
+    assert "Grounding checks failed for local" in caplog.text
+
+
+def test_judge_score_joins_the_grounding_line_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    patch_db_and_prompt: None,
+    output_page: Path,
+    fake_judge_client: Callable[[str | Exception], FakeJudgeClient],
+) -> None:
+    fake = fake_judge_client(
+        '{"claims": [{"claim": "a", "supported": true}, {"claim": "b", "supported": false}]}'
+    )
+    _patch_provider_query(monkeypatch, "local", lambda _p, **_kw: "local body")
+
+    assert orchestrator.run(cfg=_settings(ANALYSIS_JUDGE="claude", ANTHROPIC_API_KEY="k")) == 0
+
+    content = output_page.read_text(encoding="utf-8")
+    assert (
+        "_Grounding: 0/0 facts verified by automated checks."
+        " Judge: 1/2 claims supported (claude-haiku-4-5)._"
+    ) in content
+    assert [r["model"] for r in fake.requests] == ["claude-haiku-4-5"]
+
+
+def test_judge_crash_never_blocks_the_page(
+    monkeypatch: pytest.MonkeyPatch,
+    patch_db_and_prompt: None,
+    output_page: Path,
+) -> None:
+    def broken_judge(*_a: Any, **_kw: Any) -> Any:
+        raise RuntimeError("judge bug")
+
+    monkeypatch.setattr("cyber_threat_pipeline.analysis.__main__.judge_mod.judge", broken_judge)
+    _patch_provider_query(monkeypatch, "local", lambda _p, **_kw: "local body")
+
+    assert orchestrator.run(cfg=_settings(ANALYSIS_JUDGE="claude", ANTHROPIC_API_KEY="k")) == 0
+
+    content = output_page.read_text(encoding="utf-8")
+    assert "_Grounding: 0/0 facts verified by automated checks._" in content
+    assert "Judge:" not in content
 
 
 # ---------------------------------------------------------------------------

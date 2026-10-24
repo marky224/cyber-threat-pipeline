@@ -167,3 +167,37 @@ def test_write_brief_writes_file(tmp_path: Path) -> None:
     content = target.read_text(encoding="utf-8")
     assert "body" in content
     assert content.endswith("\n")
+
+
+_PULSE_ID = "6accbe14102992eb5a52b063"
+
+
+def test_render_shows_the_grounding_line_only_for_a_scored_result() -> None:
+    line = "_Grounding: 12/19 facts verified by automated checks._"
+    scored = ProviderResult(
+        name="claude", label="Claude (lab)", model="m", text="body", grounding=line
+    )
+    placeholder = "_Grok (lab) brief unavailable: APIError: 503_"
+    unscored = ProviderResult(
+        name="grok", label="Grok (lab)", model="g", text=placeholder, failed=True, grounding=None
+    )
+    md = render_markdown(generated_at=_GENERATED_AT, prompt=_PROMPT, results=[scored, unscored])
+    assert f"### Claude (lab) — `m`\n\n{line}\n\nbody" in md
+    assert f"### Grok (lab) — `g`\n\n{placeholder}" in md
+    assert md.count("Grounding:") == 1
+
+
+def test_render_links_brief_citations_but_leaves_the_prompt_ids_alone() -> None:
+    other = "6ace37f3bfe7f0829254f7bf"
+    text = f"- Midnight Mimosa. (id={_PULSE_ID})\n- Two pulses. (id={_PULSE_ID}, id={other})"
+    prompt = f"- [WHITE] Pulse (id={_PULSE_ID}, indicators=3)"
+    md = render_markdown(
+        generated_at=_GENERATED_AT, prompt=prompt, results=[_result("claude", "m", text)]
+    )
+    link = f"[OTX pulse](https://otx.alienvault.com/pulse/{_PULSE_ID})"
+    other_link = f"[OTX pulse](https://otx.alienvault.com/pulse/{other})"
+    brief, details = md.split("## Prompt context")
+    assert f"- Midnight Mimosa. ({link})" in brief
+    assert f"- Two pulses. ({link}, {other_link})" in brief
+    assert "id=" not in brief
+    assert prompt in details  # the prompt round-trips byte-for-byte

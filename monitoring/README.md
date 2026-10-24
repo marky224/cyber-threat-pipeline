@@ -1,7 +1,7 @@
 # monitoring/ — Grafana Cloud dashboards + alerts as code
 
 The **operations** surface (the analyst-facing counterpart lives in
-`reporting/`). Five conceptual panels, four alert rules, all committed as
+`reporting/`). Six conceptual panels, five alert rules, all committed as
 JSON / YAML — the Grafana Cloud tenant is configured by importing these
 artifacts, no click-around state lives outside the repo.
 
@@ -9,6 +9,7 @@ artifacts, no click-around state lives outside the repo.
 pipeline.runs         ◄── grafana_ro role ──  Grafana Cloud
 marts.mart_data_quality                       │
 marts.mart_data_quality_history               │
+pipeline.brief_evals                          │
                                               ▼
                                       operator + public-share URL
 ```
@@ -20,15 +21,15 @@ canonical SQL, alert semantics, and the eight acceptance criteria.
 
 | File | Purpose |
 |---|---|
-| `dashboard.json` | One Grafana dashboard, six grid panels (Panel 3 is split into two stat halves per spec §3.3). Schema v39, refresh 5m, default range last 90 days. |
-| `alerts.yaml` | Four alert rules in Grafana's `apiVersion: 1` provisioning format: freshness >8d (critical), run-failure (warning), volume anomaly drift-or-zero (warning), dbt test failures (warning). |
+| `dashboard.json` | One Grafana dashboard, seven grid panels (Panel 3 is split into two stat halves per spec §3.3). Schema v39, refresh 5m, default range last 90 days. |
+| `alerts.yaml` | Five alert rules in Grafana's `apiVersion: 1` provisioning format: freshness >8d (critical), run-failure (warning), volume anomaly drift-or-zero (warning), dbt test failures (warning), analyst-brief grounding below 90% (warning). |
 | `datasource.example.yaml` | Postgres datasource provisioning template — no secrets. |
 | `README.md` | This file. |
 
 ## Pre-import: the `grafana_login` Postgres user
 
 Grafana connects to Neon via a dedicated login user **with the
-`grafana_ro` group role**, scoped to `marts.*` + `pipeline.runs` only.
+`grafana_ro` group role**, scoped to `marts.*`, `pipeline.runs` and `pipeline.brief_evals` only.
 The role is created by `sql/30_grafana_role.sql`; the login user is a
 separate one-time creation against Neon (the password never lands in this
 repo):
@@ -83,7 +84,8 @@ In Grafana Cloud → Dashboards → New → Import → Upload JSON file →
 `monitoring/dashboard.json`. Grafana prompts for the `DS_NEON_RO`
 input — pick the `neon_ro` datasource you just created.
 
-The dashboard contains six grid panels in the layout from spec §7. With
+The dashboard contains seven grid panels: the six in the layout from spec §7
+plus panel 7 below them. With
 fewer than 2 successful `pipeline.runs` rows, time-series panels render
 as a single dot or empty plot — this is expected (the seed fixture
 only inserts one row). Real-world meaningful rendering kicks in after
@@ -92,6 +94,13 @@ only inserts one row). Real-world meaningful rendering kicks in after
 Panel 6 ("Data-quality trends") reads `marts.mart_data_quality_history`
 (one row per successful run); re-import the live dashboard only after
 the first pipeline run that includes it has created that table.
+
+Panel 7 ("Brief grounding") reads `pipeline.brief_evals`: per provider and
+run, the % of the analyst brief's checked facts (numbers, CVE ids, pulse ids,
+quoted names, trend words) that its `brief_input` supports, plus the optional
+judge's % of claims supported. Apply `sql/31_brief_evals.sql` to Neon before
+re-importing, or the panel errors; the table fills from the next
+`make analysis` run. Rule `ctp-brief-grounding` alerts on the same table.
 
 ### state-timeline plugin
 
@@ -102,7 +111,7 @@ found", install `grafana-statetimeline-panel` from the plugin catalog.
 
 ## Provision the alert rules
 
-`alerts.yaml` carries four rules with the placeholder
+`alerts.yaml` carries five rules with the placeholder
 `<NEON_RO_UID>` everywhere a datasource UID is referenced. Before
 provisioning, substitute it with the actual UID from your Grafana
 tenant:
