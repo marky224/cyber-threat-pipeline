@@ -1,0 +1,69 @@
+{
+  "about": "Labelled faithfulness errors in brief.md (Analyst Brief of 2026-10-14, claude-sonnet-4-6) against brief_input.json. Each label swaps one sentence of brief_corrected.md back to the original; tests/test_eval.py expects exactly the listed checks to fire for it.",
+  "labels": [
+    {
+      "id": "1",
+      "checks": [
+        "number_unsupported"
+      ],
+      "fact": "Midnight Mimosa targets 7 countries; France, Germany, Italy and Spain (4) are EU members; Mexico is not.",
+      "original": "Targets span the US, Brazil, and five EU nations, suggesting a supply-chain insertion point upstream of retail.",
+      "corrected": "Targets span the US, Brazil, Mexico and four EU nations (France, Germany, Italy, Spain)."
+    },
+    {
+      "id": "2",
+      "checks": [
+        "number_unsupported"
+      ],
+      "fact": "The pulse name says '7 govts warn'; 4 is the length of its targeted-countries list.",
+      "original": "**Flax Typhoon / Integrity Technology Group** infrastructure was disrupted by US authorities, with warnings issued across four allied governments.",
+      "corrected": "**Flax Typhoon / Integrity Technology Group** tools were disrupted by the US, with warnings issued by seven governments."
+    },
+    {
+      "id": "3a",
+      "checks": [
+        "number_unsupported"
+      ],
+      "fact": "Langflow has 16 indicators and 12 cve-* tags.",
+      "original": "Separately, **Langflow AI platform** is being probed across 16+ CVEs simultaneously, indicating opportunistic mass-exploitation of AI development infrastructure.",
+      "corrected": "Separately, the **Langflow AI platform** is being probed across 12 CVEs."
+    },
+    {
+      "id": "3b+4a",
+      "checks": [
+        "number_unsupported",
+        "comparison_without_baseline"
+      ],
+      "fact": "ClingSTUN has 31 cve-* tags (39 tags in total); the input has no previous-week figures, so 'spiked' has no baseline.",
+      "original": "**CVE indicators spiked to 49 newly seen this week**, the only CVE-type entries in the emerging window, driven largely by ClingSTUN (38+ CVEs) and Langflow — indicating active scanning and exploitation across a wide, heterogeneous vulnerability surface.",
+      "corrected": "**49 CVE indicators** were newly seen this week, the only CVE-type entries in the 7-day window; ClingSTUN (31 CVE tags) and Langflow (12) name the most CVEs."
+    },
+    {
+      "id": "4b",
+      "checks": [
+        "comparison_without_baseline"
+      ],
+      "fact": "No previous-week figures; the corpus top-5 tags are all-time counts.",
+      "original": "**AI infrastructure is a newly crystallizing target category**: Langflow exploitation, PoeLLM botnet targeting Ollama/LiteLLM, ARTEX LLM-powered attacks against South Korean finance, and AWS Bedrock credential-jacking all appeared within this 7-day window — representing a thematic spike with no strong prior-week precedent in the stable corpus tags.",
+      "corrected": "**AI infrastructure** recurs across this week's pulses: Langflow exploitation, the PoeLLM botnet targeting Ollama/LiteLLM, ARTEX attacks on South Korean finance and AWS Bedrock credential testing. None of their tags is in the corpus top-5 tags."
+    },
+    {
+      "id": "headline",
+      "checks": [
+        "comparison_without_baseline"
+      ],
+      "fact": "Not in the original list of five: 'a surge in' and 'unusually broad' compare against a baseline the input does not have.",
+      "original": "Pre-installed Android firmware compromise, dual NetScaler zero-days under active exploitation, and a surge in AI-themed lures and supply-chain attacks define an unusually broad threat surface this week.",
+      "corrected": "Pre-installed Android firmware compromise, dual NetScaler zero-days under active exploitation, and a cluster of AI-themed lures and supply-chain attacks lead this week's 35 new pulses."
+    },
+    {
+      "id": "5",
+      "checks": [
+        "length_out_of_band"
+      ],
+      "fact": "brief.md is 502 words; the prompt asks for 250-400.",
+      "original": null,
+      "corrected": null
+    }
+  ]
+}

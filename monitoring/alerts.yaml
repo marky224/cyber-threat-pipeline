@@ -1,10 +1,11 @@
 # Grafana alert-rules provisioning (apiVersion: 1).
 #
-# Four rules — full rationale + canonical SQL in _private/specs/06-monitoring-grafana.md §4.
+# Five rules:
 #   1. ctp-freshness-8d        critical   8-day SLA breach (alert 4.1)
 #   2. ctp-run-failure         warning    any failed/orphaned run in last 24h (alert 4.2)
 #   3. ctp-volume-anomaly      warning    drift OR zero on latest success (alert 4.3)
 #   4. ctp-dbt-test-failures   warning    dbt_tests_failed > 0 on latest run (alert 4.4)
+#   5. ctp-brief-grounding     warning    latest analyst brief < 90% of checked facts verified
 #
 # Datasource UID placeholder: <NEON_RO_UID>. The operator substitutes this with
 # the actual uid from Grafana Cloud (Configuration → Data sources → neon_ro
@@ -208,6 +209,59 @@ groups:
               conditions:
                 - type: query
                   evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+
+      - uid: ctp-brief-grounding
+        title: Analyst brief grounding below 90%
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+          component: analysis
+        annotations:
+          summary: The latest analyst brief has fewer than 90% of its checked facts verified.
+          description: |
+            For a provider in the latest make analysis run (pipeline.brief_evals
+            rows within an hour of the newest one, in the last 8 days),
+            facts_verified / facts_total fell below 0.9: the published brief
+            states numbers, ids, names or trends its brief_input does not support.
+            The page still published (the checks are warn-only). Read that row's
+            findings column, or the "Grounding" warnings in the Analyst brief step
+            of the pipeline.yml run, and decide whether the prompt needs work.
+            Briefs with nothing to check (facts_total = 0) are ignored.
+          runbook_url: https://github.com/marky224/cyber-threat-pipeline/blob/main/monitoring/README.md
+        data:
+          - refId: A
+            relativeTimeRange: { from: 691200, to: 0 }
+            datasourceUid: <NEON_RO_UID>
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              rawSql: |
+                select coalesce(min(facts_verified::float / nullif(facts_total, 0)), 1) as v
+                from (
+                  select distinct on (provider) provider, facts_verified, facts_total
+                  from pipeline.brief_evals
+                  where evaluated_at > now() - interval '8 days'
+                    and evaluated_at >= (select max(evaluated_at) from pipeline.brief_evals)
+                                        - interval '1 hour'
+                  order by provider, evaluated_at desc
+                ) t;
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - type: query
+                  evaluator: { type: lt, params: [0.9] }
                   operator: { type: and }
                   query: { params: [C] }
                   reducer: { type: last, params: [] }

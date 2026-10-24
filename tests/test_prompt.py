@@ -9,6 +9,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
+
+from cyber_threat_pipeline.analysis.eval import REQUIRED_SECTIONS
 from cyber_threat_pipeline.analysis.prompt import build_prompt
 
 
@@ -91,12 +94,54 @@ def test_build_prompt_footer_warns_against_invention() -> None:
 
 def test_build_prompt_includes_structure_directives() -> None:
     prompt = build_prompt(_fixture_brief())
-    # All four required sections of the brief are named explicitly so the
-    # two models produce roughly comparable shapes.
-    assert "**Headline**" in prompt
-    assert "**Emerging threats**" in prompt
-    assert "**Corpus-level shifts**" in prompt
-    assert "**Analyst caveats**" in prompt
+    # The eval opens a section only at a "## " heading, so the prompt names
+    # the four headings exactly, in order, and rules out any other.
+    headings = [
+        '"## Headline"',
+        '"## Emerging threats"',
+        '"## Contrast with the corpus"',
+        '"## Analyst caveats"',
+    ]
+    positions = [prompt.find(h) for h in headings]
+    assert -1 not in positions and positions == sorted(positions)
+    assert 'no other "##" headings' in prompt
+
+
+@pytest.mark.parametrize("section", REQUIRED_SECTIONS)
+def test_build_prompt_names_every_section_the_eval_checks(section: str) -> None:
+    assert f'"## {section}"' in build_prompt(_fixture_brief())
+
+
+def test_build_prompt_asks_for_pulse_ids_and_allows_not_in_the_data() -> None:
+    prompt = build_prompt(_fixture_brief())
+    assert "(id=<pulse id>)" in prompt
+    assert '"not in the data"' in prompt
+
+
+def test_build_prompt_says_there_is_no_baseline_and_asks_for_no_trends() -> None:
+    prompt = build_prompt(_fixture_brief())
+    assert "no previous-week figures" in prompt
+    for gone in ("Corpus-level shifts", "TLP-distribution shift", "tag spike"):
+        assert gone not in prompt
+
+
+def test_build_prompt_caps_length_and_limits_numbers_to_the_data() -> None:
+    prompt = build_prompt(_fixture_brief())
+    assert "250-400 words, headings included; never more than 400" in prompt
+    assert "Do not add up counts across pulses" in prompt
+
+
+def test_build_prompt_keeps_template_lines_at_column_zero() -> None:
+    # textwrap.dedent used to run after the pulse block was interpolated; the
+    # block's shallower lines capped the dedent and left the template indented.
+    prompt = build_prompt(_fixture_brief())
+    lines = prompt.splitlines()
+    assert "## Corpus context" in [line[:17] for line in lines]
+    assert "## What to produce" in lines
+    pulse_lines = [line for line in lines if line.lstrip().startswith("- [")]
+    assert pulse_lines and all(line.startswith("  - [") for line in pulse_lines)
+    tag_lines = [line for line in lines if line.lstrip().startswith("tags: ")]
+    assert tag_lines and all(line.startswith("      tags: ") for line in tag_lines)
 
 
 def test_build_prompt_is_deterministic() -> None:

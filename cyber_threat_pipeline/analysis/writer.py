@@ -15,11 +15,18 @@ Deterministic for a given (generated_at, prompt, results) tuple.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 PAGE_PATH = Path("reporting/pages/analyst-brief.md")
+
+# The prompt asks for "(id=<pulse id>)" citations; the page links them to the
+# public OTX pulse instead of showing 24 hex characters. The eval reads the
+# raw ids from the model's markdown before this runs.
+_PULSE_CITATION = re.compile(r"\bid=([0-9a-f]{24})\b")
+_OTX_PULSE_URL = "https://otx.alienvault.com/pulse/"
 
 
 @dataclass(frozen=True)
@@ -28,16 +35,19 @@ class ProviderResult:
 
     ``text`` is either the rendered brief, or the visible-failure placeholder
     ``_<provider> brief unavailable: <error>_`` the orchestrator produces on
-    per-provider error (spec §4.3).
+    per-provider error (spec §4.3); ``failed`` marks that case.
+    ``grounding`` is the eval's one-line score, rendered under the heading.
     """
 
     name: str
     label: str
     model: str
     text: str
+    failed: bool = False
+    grounding: str | None = None
 
 
-def _dedupe(results: list[ProviderResult]) -> list[ProviderResult]:
+def dedupe(results: list[ProviderResult]) -> list[ProviderResult]:
     """Keep the first occurrence of each (name, model) pair."""
     seen: set[tuple[str, str]] = set()
     out: list[ProviderResult] = []
@@ -50,8 +60,14 @@ def _dedupe(results: list[ProviderResult]) -> list[ProviderResult]:
     return out
 
 
+def _link_citations(text: str) -> str:
+    return _PULSE_CITATION.sub(rf"[OTX pulse]({_OTX_PULSE_URL}\1)", text)
+
+
 def _render_provider_block(r: ProviderResult) -> str:
-    return f"### {r.label} — `{r.model}`\n\n{r.text.rstrip()}"
+    heading = f"### {r.label} — `{r.model}`"
+    grounding = f"\n\n{r.grounding}" if r.grounding else ""
+    return f"{heading}{grounding}\n\n{_link_citations(r.text.rstrip())}"
 
 
 def _render_body(results: list[ProviderResult]) -> str:
@@ -81,7 +97,7 @@ def render_markdown(
     if not results:
         raise ValueError("render_markdown requires at least one provider result")
 
-    unique = _dedupe(results)
+    unique = dedupe(results)
     body = _render_body(unique)
     multi = len(unique) > 1
 

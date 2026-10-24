@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
     google_api_key: SecretStr | None = Field(default=None, alias="GOOGLE_API_KEY")
 
+    # Optional brief judge (analysis/judge.py): "claude" (Haiku) or "local"
+    # (Ollama). Empty = off. Plain str, not a Literal: a bad value must log a
+    # warning, not fail Settings() and with it the publish.
+    analysis_judge: str = Field("", alias="ANALYSIS_JUDGE")
+    judge_model: str = Field("", alias="JUDGE_MODEL")
+
     # Local LLM (Ollama by default). Used by the 'local' provider; HTTP server with
     # an OpenAI-compatible /v1/chat/completions endpoint.
     ollama_base_url: str = Field("http://localhost:11434", alias="OLLAMA_BASE_URL")

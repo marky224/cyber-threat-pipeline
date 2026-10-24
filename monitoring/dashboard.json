@@ -371,6 +371,51 @@
           "rawSql": "select started_at as \"time\", total_indicators, active_indicators, expired_indicators, dropped_indicators, orphan_indicators, pct_active from marts.mart_data_quality_history where $__timeFilter(started_at) order by started_at;"
         }
       ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Brief grounding (% of checked facts verified)",
+      "description": "Analyst-brief faithfulness per provider, one point per make analysis run from pipeline.brief_evals: facts verified by the deterministic checks (numbers, CVE ids, pulse ids, quoted names, trend words) as a % of facts checked, plus the optional judge's % of claims supported. Below the dashed 90% line, alert ctp-brief-grounding fires. The findings column of the table says what failed.",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "scaleDistribution": { "type": "linear" },
+            "stacking": { "mode": "none", "group": "A" },
+            "thresholdsStyle": { "mode": "dashed" }
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 90 }]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select evaluated_at as \"time\", provider as metric, 100.0 * facts_verified / nullif(facts_total, 0) as verified_pct, 100.0 * judge_claims_supported / nullif(judge_claims_total, 0) as judge_pct from pipeline.brief_evals where $__timeFilter(evaluated_at) order by 1;"
+        }
+      ]
     }
   ],
   "refresh": "5m",

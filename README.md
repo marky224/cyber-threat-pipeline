@@ -61,7 +61,7 @@ Every Monday at 13:23 UTC, [`.github/workflows/pipeline.yml`](.github/workflows/
 
 1. **Ingest** (`make ingest`) — pulls OTX pulses modified since the watermark in `pipeline.state`, transforms in pandas, idempotently upserts into Neon's `raw` schema. The watermark advances only on success, so failed runs are replayable.
 2. **Transform** (`make transform`) — the isolated dbt env builds 10 marts (staging → intermediate → marts), runs schema + data tests, captures the result for the audit row.
-3. **Analyse** (`make analysis`) — the configured primary + secondary LLM providers each render the same prompt against the current marts; output replaces `reporting/pages/analyst-brief.md` (gitignored, regenerated each run). Claude is the production primary; `ANALYSIS_PRIMARY_PROVIDER` swaps in Grok / GPT / Gemini / local Ollama with no code change.
+3. **Analyse** (`make analysis`) — each LLM provider listed in `ANALYSIS_PROVIDERS` renders the same prompt against the current marts; output replaces `reporting/pages/analyst-brief.md` (gitignored, regenerated each run). Production runs Claude only (`ANALYSIS_PROVIDERS=claude`); adding Grok / GPT / Gemini / local Ollama to that comma-separated list renders them side by side with no code change. Grounding checks then score every brief against its own input (numbers, CVE and pulse ids, quoted names, trend claims with no baseline): the page shows "Grounding: N/M facts verified", the score lands in `pipeline.brief_evals`, and a Grafana alert fires below 90%. The checks warn; they never block the publish.
 4. **Publish** (`make report`) — Evidence builds the static site, syncs to S3 under the GitHub-OIDC deploy role, invalidates CloudFront.
 5. **Audit** — each stage writes a row to `pipeline.runs` with status, row counts, and dbt test outcomes. Grafana reads this table through the read-only `grafana_ro` role; a failure trips the `ctp-run-failure` alert.
 
@@ -82,7 +82,7 @@ Every stage is reproducible locally with the same `make` target — local dev an
 | Transformation | dbt Core (Postgres adapter) |
 | Reporting | Evidence.dev → S3 + CloudFront (us-east-1) |
 | Monitoring | Grafana Cloud (free tier) |
-| Analyst brief | **Claude** (primary) · provider-agnostic (Grok · GPT · Gemini · local Ollama swap in via one env-var) · any two providers rendered side-by-side |
+| Analyst brief | **Claude** in production · provider-agnostic (Grok · GPT · Gemini · local Ollama join via `ANALYSIS_PROVIDERS`) · several providers render side-by-side · grounding checks on every brief |
 | Orchestration | GitHub Actions (weekly cron + dispatch), `Makefile` as single source of truth |
 | Infra | Terraform (S3 + OAC + CloudFront + ACM + Route 53 + GitHub OIDC role) |
 | Lint / types / tests | ruff · mypy · pytest · pre-commit |
@@ -93,11 +93,11 @@ Every stage is reproducible locally with the same `make` target — local dev an
 cyber_threat_pipeline/      Python app package
 ├── core/                   Config (pydantic-settings), logging, Neon connection helpers
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
-└── analysis/               LLM analyst brief · Claude primary · 5 providers swappable · any 2 side-by-side
+└── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
 sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
 transform/                  dbt Core (isolated env) · 10 marts · staging → intermediate → marts · schema + data tests
 reporting/                  Evidence.dev (Node 24 LTS) · 3 pages · postgres datasource via single connection-string env
-monitoring/                 Grafana dashboard (5 panels) + alerts (4 rules) as code · no UI state
+monitoring/                 Grafana dashboard (6 panels) + alerts (5 rules) as code · no UI state
 infra/                      Terraform · S3 + CloudFront + ACM + Route 53 + GitHub OIDC deploy role · no static AWS keys
 tests/                      pytest
 docs/                       architecture.md (annotated diagram) + screenshots/
