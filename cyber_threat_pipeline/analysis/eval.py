@@ -24,7 +24,9 @@ Checks (``Finding.check`` codes are stable; Grafana and tests key on them):
   citation.
 - ``pulse_name_unknown``: every double-quoted string in the brief, in any
   section, bullet or paragraph, is a substring of an input pulse name or tag
-  (case-insensitive).
+  (case-insensitive). Trailing ``, . ; : ! ?`` and whitespace inside the
+  quotes are ignored: "APT28," quotes the tag APT28. A quote of nothing but
+  those is no fact.
 - ``cve_unknown``: every CVE id appears in an input pulse name or tag.
 - ``number_unsupported``: every number is in the allowed set for its scope and
   unit (rules below).
@@ -138,6 +140,7 @@ Number rules (``number_unsupported``):
 from __future__ import annotations
 
 import re
+import string
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -175,6 +178,9 @@ _SECTION_HEADING = re.compile(r"^\s*##\s+(.*)$")
 _BOLD_LINE = re.compile(r"^\s*\*\*([^*]+)\*\*:?\s*$")
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
 _QUOTED = re.compile(r"\"([^\"]+)\"|“([^”]+)”")
+# Trailing punctuation and whitespace inside a quote are not part of the
+# name: a US-style brief writes "APT28," "Lazarus."
+_QUOTE_TAIL = ",.;:!?" + string.whitespace
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9*\"“(])")
 _MASK = re.compile(
     r"\bCVE-\d{4}-\d{4,}\b"
@@ -606,7 +612,9 @@ def _check_quoted_names(blocks: list[_Block], pulses: list[_Pulse], _g: object) 
     for b in blocks:
         for s in _sentences(b.text):
             for m in _QUOTED.finditer(s):
-                quote = (m.group(1) or m.group(2)).strip().lower()
+                quote = (m.group(1) or m.group(2)).strip().rstrip(_QUOTE_TAIL).lower()
+                if not quote:
+                    continue
                 checked += 1
                 if not any(quote in h for h in haystack):
                     found.append(
