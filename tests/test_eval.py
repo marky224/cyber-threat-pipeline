@@ -1299,3 +1299,41 @@ def test_a_quote_of_nothing_but_punctuation_is_no_fact() -> None:
     result = evaluate('Some pulses carry only "..." as a description.', _ACTORS)
     assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
     assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
+# --------------------------------------------------------------------------
+# How quote marks pair
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("prose", "facts"),
+    [
+        ('One stray " mark here. Officials link "APT28" to it.', (1, 1)),
+        ('A 27" screen shows it. Officials link "APT28" to it.', (1, 2)),
+        ('One stray " mark sits next to "APT28" here.', (1, 1)),
+        ('A 27" screen shows "APT28" here.', (1, 2)),
+    ],
+    ids=["stray mark", "inch mark", "stray mark, one sentence", "inch mark, one sentence"],
+)
+def test_a_straight_quote_mark_before_a_space_opens_no_quote(
+    prose: str, facts: tuple[int, int]
+) -> None:
+    # The stray mark would pair with the quote before APT28 and check the gap
+    # between them instead. The "27" count is the second fact of the inch mark.
+    result = evaluate(prose, _ACTORS)
+    assert [f.detail for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == facts
+
+
+def test_a_curly_quote_opening_inside_a_curly_quote_starts_a_new_one() -> None:
+    result = evaluate("Lures name “Fake “Zebra” Kit” again.", _ACTORS)
+    names = [f.detail for f in result.findings if f.check == "pulse_name_unknown"]
+    assert names == ["'zebra' is not in any pulse name or tag"]
+
+
+def test_unpaired_curly_quotes_stay_fast() -> None:
+    # Each “ with no ” after it used to be read to the end of the text: about
+    # 10 s for 20,000 of them in one sentence.
+    md = _brief(f"Routerbot ships {'“a ' * 20_000}. (id={ID_A})")
+    assert _timed_evaluate(md, SYNTH) < 1.0

@@ -103,7 +103,9 @@ written from (`eval.py`, pure and deterministic). The checks:
   quote must be part of a name or tag of a pulse from the last 7 days, so
   a quoted country, tag or industry that no such pulse's name or tag
   contains counts as a failed fact. Trailing `, . ; : ! ?` and spaces
-  inside the quotes are ignored: `"APT28,"` quotes the tag APT28
+  inside the quotes are ignored: `"APT28,"` quotes the tag APT28. A
+  straight quote mark followed by a space opens no quote (the inch mark in
+  `a 27" screen`), and a quote mark left unpaired is plain text
 - every number is supported for its unit by the pulses its bullet cites
   (CVEs, countries, indicators, governments, pulses, percentages, "about N",
   "N+"); the module docstring has the rules
