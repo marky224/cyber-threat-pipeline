@@ -576,6 +576,10 @@ def test_long_tokens_and_whitespace_runs_stay_fast() -> None:
     # about 5 s for 20,000 spaces.
     md = _brief(f"Routerbot ships two droppers{' ' * 20_000}today. (id={ID_A})")
     assert _timed_evaluate(md, SYNTH) < 1.0
+    # Stripping a quote's trailing punctuation reads a space run in it once: an
+    # unanchored "[\s,.;:!?]+$" takes about 5 s for 40,000 spaces.
+    md = _brief(f'Routerbot ships "APT28{" " * 40_000}x". (id={ID_A})')
+    assert _timed_evaluate(md, SYNTH) < 1.0
 
 
 _MIMOSA_COUNT = "(301 indicators, the largest pulse this week)"
@@ -1224,3 +1228,74 @@ def test_a_quoted_name_outside_emerging_threats_is_checked(before: str | None) -
     result = evaluate(md, BRIEF_INPUT)
     assert [(f.check, f.text) for f in result.findings] == [("pulse_name_unknown", _RANSOMWARE)]
     assert (result.facts_verified, result.facts_total) == (31, 32)
+
+
+# --------------------------------------------------------------------------
+# Punctuation inside the quotes is not part of the name
+# --------------------------------------------------------------------------
+
+_ACTORS: dict[str, Any] = {
+    **SYNTH,
+    "emerging_pulses_7d": [
+        {
+            "id": ID_A,
+            "name": "Active Exploitation of CVE-2026-110936 in Siemens Software Center",
+            "tlp": "white",
+            "tags": ["APT28", "ics"],
+            "targeted_countries": ["Germany"],
+            "first_seen_at": "2026-10-20T00:00:00+00:00",
+            "indicator_count": 4,
+        },
+        {
+            "id": ID_B,
+            "name": "DPRK fake recruiter lures",
+            "tlp": "white",
+            "tags": ["Lazarus"],
+            "targeted_countries": [],
+            "first_seen_at": "2026-10-20T00:00:00+00:00",
+            "indicator_count": 3,
+        },
+    ],
+}
+_ACTOR_TAGS = 'Pulse tags such as "APT28," "Lazarus," or "DPRK" reflect vendor attribution.'
+
+
+@pytest.mark.parametrize(
+    ("prose", "facts"),
+    [
+        (_ACTOR_TAGS, 3),
+        (
+            "Pulse tags such as “APT28,” “Lazarus,” or “DPRK” reflect vendor attribution.",
+            3,
+        ),
+        (
+            "Industrial/OT targeting surfaces in"
+            ' "Active Exploitation of CVE-2026-110936 in Siemens Software Center."',
+            2,
+        ),
+        ('Vendor notes read "APT28;" "Lazarus:" "DPRK!" and "APT28 ?" in turn.', 4),
+        (_ACTOR_TAGS.replace("APT28,", "APT28\u00a0,").replace("Lazarus,", "Lazarus\u202f!"), 3),
+    ],
+    ids=["comma", "comma in curly quotes", "period", "; : ! ? and a space", "no-break spaces"],
+)
+def test_punctuation_inside_the_quotes_is_not_part_of_the_name(prose: str, facts: int) -> None:
+    # US style puts the comma or period inside the quotes: "APT28," quotes
+    # the tag APT28. In the period case the CVE id is the second fact. Any
+    # Unicode space before the punctuation goes too.
+    result = evaluate(prose, _ACTORS)
+    assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == (facts, facts)
+
+
+def test_an_invented_name_with_a_comma_inside_the_quotes_is_still_flagged() -> None:
+    prose = _ACTOR_TAGS.replace('"Lazarus,"', '"Operation Dark Lotus,"')
+    result = evaluate(prose, _ACTORS)
+    names = [(f.text, f.detail) for f in result.findings if f.check == "pulse_name_unknown"]
+    assert names == [(prose, "'operation dark lotus' is not in any pulse name or tag")]
+    assert (result.facts_verified, result.facts_total) == (2, 3)
+
+
+def test_a_quote_of_nothing_but_punctuation_is_no_fact() -> None:
+    result = evaluate('Some pulses carry only "..." as a description.', _ACTORS)
+    assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == (0, 0)
