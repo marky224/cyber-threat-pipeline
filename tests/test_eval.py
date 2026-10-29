@@ -1337,3 +1337,132 @@ def test_unpaired_curly_quotes_stay_fast() -> None:
     # 10 s for 20,000 of them in one sentence.
     md = _brief(f"Routerbot ships {'“a ' * 20_000}. (id={ID_A})")
     assert _timed_evaluate(md, SYNTH) < 1.0
+    # Sentences split around whole quotes, so the quote search reads the whole
+    # bullet: 20,000 short sentences each opening a “ must stay linear too.
+    md = _brief(f"Routerbot ships {'“a. B' * 20_000} (id={ID_A})")
+    assert _timed_evaluate(md, SYNTH) < 1.0
+
+
+# --------------------------------------------------------------------------
+# A sentence never ends inside a quote
+# --------------------------------------------------------------------------
+
+# _ACTORS, with a pulse name and a tag that hold an abbreviation.
+_ABBREV: dict[str, Any] = json.loads(json.dumps(_ACTORS))
+_ABBREV["emerging_pulses_7d"][0]["name"] = "U.S. Treasury Phishing Kit"
+_ABBREV["emerging_pulses_7d"][1]["tags"] = ["Acme Inc. Loader"]
+
+
+def _name_findings(prose: str, brief_input: dict[str, Any] = _ACTORS) -> list[tuple[str, str]]:
+    found = evaluate(prose, brief_input).findings
+    return [(f.text, f.detail) for f in found if f.check == "pulse_name_unknown"]
+
+
+@pytest.mark.parametrize(
+    ("prose", "quote"),
+    [
+        (
+            'Officials link "U.S. Fake Operation Zebra" to the campaign.',
+            "u.s. fake operation zebra",
+        ),
+        (
+            "Officials link “U.S. Fake Operation Zebra” to the campaign.",
+            "u.s. fake operation zebra",
+        ),
+        ('"Acme Inc. Fake Botnet" is new.', "acme inc. fake botnet"),
+        ("“Acme Inc. Fake Botnet” is new.", "acme inc. fake botnet"),
+        ('Lures name "Fake Loaders e.g. Zebra" again.', "fake loaders e.g. zebra"),
+    ],
+    ids=["U.S.", "U.S. in curly quotes", "Inc.", "Inc. in curly quotes", "e.g."],
+)
+def test_a_quote_holding_an_abbreviation_is_one_name(prose: str, quote: str) -> None:
+    # "U.S." before a capital used to end the sentence inside the quote, so
+    # neither half held a whole quote and the invented name scored 0/0.
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [(prose, f"{quote!r} is not in any pulse name or tag")]
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
+def test_a_known_name_holding_an_abbreviation_passes() -> None:
+    prose = 'Lures reuse "U.S. Treasury Phishing Kit" and “Acme Inc. Loader” this week.'
+    result = evaluate(prose, _ABBREV)
+    assert _name_findings(prose, _ABBREV) == []
+    assert (result.facts_verified, result.facts_total) == (2, 2)
+
+
+def test_each_quote_in_a_list_is_read_whole() -> None:
+    # Cut after "U.S.", the list used to pair the gaps: only " and " was checked.
+    prose = 'Officials name "U.S. Fake Zebra", "Acme Inc. Fake Botnet" and "APT28" in turn.'
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (prose, "'u.s. fake zebra' is not in any pulse name or tag"),
+        (prose, "'acme inc. fake botnet' is not in any pulse name or tag"),
+    ]
+    assert (result.facts_verified, result.facts_total) == (1, 3)
+
+
+@pytest.mark.parametrize(
+    ("prose", "sentence", "quote"),
+    [
+        (
+            'Per the U.S. Treasury, "Acme Inc. Fake Botnet" is new.',
+            'Treasury, "Acme Inc. Fake Botnet" is new.',
+            "acme inc. fake botnet",
+        ),
+        (
+            'Per Acme Inc. Research, "U.S. Fake Zebra" is new.',
+            'Research, "U.S. Fake Zebra" is new.',
+            "u.s. fake zebra",
+        ),
+        ('Lures (e.g. "U.S. Fake Zebra") recur.', '"U.S. Fake Zebra") recur.', "u.s. fake zebra"),
+    ],
+    ids=["U.S.", "Inc.", "e.g."],
+)
+def test_abbreviations_outside_quotes_still_end_a_sentence(
+    prose: str, sentence: str, quote: str
+) -> None:
+    # Known limit: outside quotes the split is unchanged, so the finding's
+    # text starts after the abbreviation. The quote itself is read whole.
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [(sentence, f"{quote!r} is not in any pulse name or tag")]
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
+def test_an_unpaired_quote_mark_neither_counts_nor_holds_back_later_sentences() -> None:
+    sentence = "Officials link “U.S. Fake Operation Zebra” to it."
+    prose = f'One stray " mark here. {sentence}'
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (sentence, "'u.s. fake operation zebra' is not in any pulse name or tag")
+    ]
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
+def test_an_unclosed_quote_is_no_fact() -> None:
+    # Pins today's rule: a quote mark with no partner is plain text.
+    prose = 'Officials link "U.S. Fake Operation Zebra to the campaign.'
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == []
+    assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
+def test_a_trend_word_in_a_quote_holding_an_abbreviation_is_ignored() -> None:
+    md = _brief(f"Routerbot. (id={ID_A})", contrast='- Vendors call it "U.S. Surge Campaign" now.')
+    assert _findings(md, "comparison_without_baseline") == []
+
+
+def test_id_and_cve_findings_show_the_whole_sentence_around_a_quoted_abbreviation() -> None:
+    sentence = f'"U.S. Fake Zebra" exploits CVE-2099-0001 (id={"f" * 24}).'
+    result = evaluate(_brief(sentence), SYNTH)
+    checks = {"pulse_id_unknown", "pulse_name_unknown", "cve_unknown"}
+    assert sorted((f.check, f.text) for f in result.findings if f.check in checks) == [
+        ("cve_unknown", sentence),
+        ("pulse_id_unknown", sentence),
+        ("pulse_name_unknown", sentence),
+    ]
+
+
+def test_bold_names_before_a_quoted_abbreviation_still_count_as_named_items() -> None:
+    # "two botnets" is the two bold names before it, past the quoted "U.S.".
+    md = _brief(f'**Routerbot** and **Kimsuky** ride "U.S. Fake Kit" as two botnets. (id={ID_A})')
+    assert _findings(md, "number_unsupported") == []

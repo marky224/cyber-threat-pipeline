@@ -105,7 +105,9 @@ written from (`eval.py`, pure and deterministic). The checks:
   contains counts as a failed fact. Trailing `, . ; : ! ?` and spaces
   inside the quotes are ignored: `"APT28,"` quotes the tag APT28. A
   straight quote mark followed by a space opens no quote (the inch mark in
-  `a 27" screen`), and a quote mark left unpaired is plain text
+  `a 27" screen`), and a quote mark left unpaired is plain text. A quote is
+  read whole even when it holds an abbreviation
+  (`"U.S. Fake Operation Zebra"`): no check ends a sentence inside a quote
 - every number is supported for its unit by the pulses its bullet cites
   (CVEs, countries, indicators, governments, pulses, percentages, "about N",
   "N+"); the module docstring has the rules

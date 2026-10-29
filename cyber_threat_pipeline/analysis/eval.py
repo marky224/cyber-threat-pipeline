@@ -41,6 +41,11 @@ Checks (``Finding.check`` codes are stable; Grafana and tests key on them):
   figures, so no such comparison can be supported. Quoted text is ignored, so
   a pulse name like "the rise of Midnight Mimosa" can be quoted.
 
+Sentences: a bullet or paragraph splits after ``. ! ?`` and whitespace
+before a capital, digit, ``*``, a quote or ``(``, never inside a quote, so
+every check reads "U.S. Fake Operation Zebra" whole. Outside quotes an
+abbreviation still ends a sentence: "the U.S. Treasury" splits after "U.S.".
+
 Number rules (``number_unsupported``):
 
 - Parsing: digits (``1,234``, ``4.5``), ``N+``, ``N%``, ranges ``a-b`` (hyphen or
@@ -189,6 +194,10 @@ _QUOTED = re.compile(r"\"(?=\S)([^\"]+)\"|“([^“”]+)”")
 # is read once (unanchored, the search retries at every space: quadratic).
 _QUOTE_TAIL = re.compile(r"(?<![\s,.;:!?])[\s,.;:!?]+$")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9*\"“(])")
+# A quote or a sentence end. A split falls only on a sentence end, so a quote
+# is never cut: "U.S. Fake Operation Zebra" is one quote. Quotes pair as in
+# ``_QUOTED``; an unpaired quote mark is plain text.
+_SENTENCE_OR_QUOTE = re.compile(rf"{_QUOTED.pattern}|{_SENTENCE_END.pattern}")
 _MASK = re.compile(
     r"\bCVE-\d{4}-\d{4,}\b"
     r"|\b[0-9a-f]{24}\b"
@@ -548,7 +557,15 @@ def _unique_tags(pulses: list[_Pulse]) -> dict[str, _Pulse]:
 
 
 def _sentences(text: str) -> list[str]:
-    return [s for s in _SENTENCE_END.split(text) if s.strip()]
+    """``text`` split at sentence ends, never inside a quoted string."""
+    out: list[str] = []
+    start = 0
+    for m in _SENTENCE_OR_QUOTE.finditer(text):
+        if m.lastindex is None:  # a sentence end; a quote sets group 1 or 2
+            out.append(text[start : m.start()])
+            start = m.end()
+    out.append(text[start:])
+    return [s for s in out if s.strip()]
 
 
 def _count_words(brief_md: str) -> int:
