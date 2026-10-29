@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 
 from cyber_threat_pipeline.analysis.eval import (
+    FACT_CHECKS,
     REQUIRED_SECTIONS,
     EvalResult,
     Finding,
@@ -1326,6 +1327,56 @@ def test_a_straight_quote_mark_before_a_space_opens_no_quote(
     assert (result.facts_verified, result.facts_total) == facts
 
 
+@pytest.mark.parametrize(
+    ("prose", "found", "facts"),
+    [
+        (
+            'Officials link "Fake Zebra to it. Vendors saw a surge. Others cite "APT28" too.',
+            [("comparison_without_baseline", "Vendors saw a surge.")],
+            (1, 2),
+        ),
+        ('Officials link "U.S. Fake Zebra to it. Others cite "APT28" too.', [], (1, 1)),
+        (
+            'A 27"-inch screen shows it. Officials link "APT28" to it.',
+            [("number_unsupported", 'A 27"-inch screen shows it.')],
+            (1, 2),
+        ),
+        ('He said "hi. Officials link "APT28" to it.', [], (1, 1)),
+    ],
+    ids=[
+        "unclosed, then a trend word",
+        "unclosed U.S.",
+        "inch mark before a hyphen",
+        "unclosed hi",
+    ],
+)
+def test_a_straight_quote_closes_only_before_a_non_word_character(
+    prose: str, found: list[tuple[str, str]], facts: tuple[int, int]
+) -> None:
+    # The mark before APT28 is followed by a word, so it can't close the
+    # unclosed quote: that quote would swallow the sentences up to it, check
+    # the gap text as a name, hide the trend word and leave APT28 unchecked.
+    # The "27" count is the second fact of the inch mark.
+    result = evaluate(prose, _ACTORS)
+    assert [(f.check, f.text) for f in result.findings if f.check in FACT_CHECKS] == found
+    assert (result.facts_verified, result.facts_total) == facts
+
+
+@pytest.mark.parametrize("space", [" ", "\u00a0"], ids=["space", "no-break space"])
+def test_a_straight_quote_opening_with_a_space_is_not_checked(space: str) -> None:
+    # Known limit, pinned: a straight quote opens only before a non-space.
+    result = evaluate(f'Officials link "{space}Fake Zebra" to it.', _ACTORS)
+    assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
+def test_unclosed_straight_quotes_stay_fast() -> None:
+    # No straight quote mark here can close: each is followed by a word.
+    marks = '"a' * 20_000
+    md = _brief(f"Routerbot ships {marks} (id={ID_A})")
+    assert _timed_evaluate(md, SYNTH) < 5.0
+
+
 def test_a_curly_quote_opening_inside_a_curly_quote_starts_a_new_one() -> None:
     result = evaluate("Lures name “Fake “Zebra” Kit” again.", _ACTORS)
     names = [f.detail for f in result.findings if f.check == "pulse_name_unknown"]
@@ -1428,9 +1479,18 @@ def test_abbreviations_outside_quotes_still_end_a_sentence(
     assert (result.facts_verified, result.facts_total) == (0, 1)
 
 
-def test_an_unpaired_quote_mark_neither_counts_nor_holds_back_later_sentences() -> None:
-    sentence = "Officials link “U.S. Fake Operation Zebra” to it."
-    prose = f'One stray " mark here. {sentence}'
+@pytest.mark.parametrize(
+    ("before", "sentence"),
+    [
+        ('One stray " mark here.', "Officials link “U.S. Fake Operation Zebra” to it."),
+        ('He said "hi.', 'Officials link "U.S. Fake Operation Zebra" to it.'),
+    ],
+    ids=["stray mark, curly quote", "unclosed quote, straight quote"],
+)
+def test_an_unpaired_quote_mark_neither_counts_nor_holds_back_later_sentences(
+    before: str, sentence: str
+) -> None:
+    prose = f"{before} {sentence}"
     result = evaluate(prose, _ACTORS)
     assert _name_findings(prose) == [
         (sentence, "'u.s. fake operation zebra' is not in any pulse name or tag")

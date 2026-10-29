@@ -27,9 +27,12 @@ Checks (``Finding.check`` codes are stable; Grafana and tests key on them):
   (case-insensitive). Trailing ``, . ; : ! ?`` and whitespace (any Unicode
   space, a no-break space too) inside the quotes are ignored: "APT28,"
   quotes the tag APT28. A quote of nothing but those is no fact. A straight
-  quote mark opens a quote only before a non-space, so the inch mark in
-  'a 27" screen' opens none; a curly quote ends at its first ” and can't
-  hold another “. A quote mark left unpaired is plain text, no fact.
+  quote mark opens a quote only before a non-space and closes it only before
+  a non-word character, so the inch mark in 'a 27" screen' opens none, and in
+  'He said "hi. Officials link "APT28"' the unclosed "hi. pairs with nothing
+  and APT28 is checked. A straight quote that opens with a space (any Unicode
+  space: " Fake Zebra") is not checked. A curly quote ends at its first ” and
+  can't hold another “. A quote mark left unpaired is plain text, no fact.
 - ``cve_unknown``: every CVE id appears in an input pulse name or tag.
 - ``number_unsupported``: every number is in the allowed set for its scope and
   unit (rules below).
@@ -185,9 +188,11 @@ _SECTION_HEADING = re.compile(r"^\s*##\s+(.*)$")
 _BOLD_LINE = re.compile(r"^\s*\*\*([^*]+)\*\*:?\s*$")
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
 # A straight quote opens only before a non-space, so the inch mark in 'a 27"
-# screen' opens none. A curly quote can't hold another opening one, so a “
-# with no ” after it is read up to the next “ (to the end: quadratic).
-_QUOTED = re.compile(r"\"(?=\S)([^\"]+)\"|“([^“”]+)”")
+# screen' opens none, and closes only before a non-word character, so in
+# 'He said "hi. Officials link "APT28"' the mark before APT28 opens a quote
+# instead of closing "hi. A curly quote can't hold another opening one, so a
+# “ with no ” after it is read up to the next “ (to the end: quadratic).
+_QUOTED = re.compile(r"\"(?=\S)([^\"]+)\"(?!\w)|“([^“”]+)”")
 # Trailing punctuation and whitespace (any Unicode space) inside a quote are
 # not part of the name: a US-style brief writes "APT28," "Lazarus." The
 # lookbehind starts a match only where such a run starts, so a long space run
