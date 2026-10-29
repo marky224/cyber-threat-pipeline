@@ -576,6 +576,10 @@ def test_long_tokens_and_whitespace_runs_stay_fast() -> None:
     # about 5 s for 20,000 spaces.
     md = _brief(f"Routerbot ships two droppers{' ' * 20_000}today. (id={ID_A})")
     assert _timed_evaluate(md, SYNTH) < 1.0
+    # Stripping a quote's trailing punctuation reads a space run in it once: an
+    # unanchored "[\s,.;:!?]+$" takes about 5 s for 40,000 spaces.
+    md = _brief(f'Routerbot ships "APT28{" " * 40_000}x". (id={ID_A})')
+    assert _timed_evaluate(md, SYNTH) < 1.0
 
 
 _MIMOSA_COUNT = "(301 indicators, the largest pulse this week)"
@@ -1269,12 +1273,15 @@ _ACTOR_TAGS = 'Pulse tags such as "APT28," "Lazarus," or "DPRK" reflect vendor a
             ' "Active Exploitation of CVE-2026-110936 in Siemens Software Center."',
             2,
         ),
+        ('Vendor notes read "APT28;" "Lazarus:" "DPRK!" and "APT28 ?" in turn.', 4),
+        (_ACTOR_TAGS.replace("APT28,", "APT28\u00a0,").replace("Lazarus,", "Lazarus\u202f!"), 3),
     ],
-    ids=["comma", "comma in curly quotes", "period"],
+    ids=["comma", "comma in curly quotes", "period", "; : ! ? and a space", "no-break spaces"],
 )
 def test_punctuation_inside_the_quotes_is_not_part_of_the_name(prose: str, facts: int) -> None:
     # US style puts the comma or period inside the quotes: "APT28," quotes
-    # the tag APT28. In the period case the CVE id is the second fact.
+    # the tag APT28. In the period case the CVE id is the second fact. Any
+    # Unicode space before the punctuation goes too.
     result = evaluate(prose, _ACTORS)
     assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
     assert (result.facts_verified, result.facts_total) == (facts, facts)

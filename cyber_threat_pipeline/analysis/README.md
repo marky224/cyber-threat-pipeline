@@ -102,8 +102,8 @@ written from (`eval.py`, pure and deterministic). The checks:
   bold-only lines aren't read), and CVE ids, appear in the input. Every
   quote must be part of a name or tag of a pulse from the last 7 days, so
   a quoted country, tag or industry that no such pulse's name or tag
-  contains counts as a failed fact. Trailing punctuation inside the quotes
-  is ignored: `"APT28,"` quotes the tag APT28
+  contains counts as a failed fact. Trailing `, . ; : ! ?` and spaces
+  inside the quotes are ignored: `"APT28,"` quotes the tag APT28
 - every number is supported for its unit by the pulses its bullet cites
   (CVEs, countries, indicators, governments, pulses, percentages, "about N",
   "N+"); the module docstring has the rules
