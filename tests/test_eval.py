@@ -1350,15 +1350,61 @@ def test_a_straight_quote_mark_before_a_space_opens_no_quote(
         "unclosed hi",
     ],
 )
-def test_a_straight_quote_closes_only_before_a_non_word_character(
+def test_a_straight_quote_closes_only_where_no_letter_or_digit_follows(
     prose: str, found: list[tuple[str, str]], facts: tuple[int, int]
 ) -> None:
-    # The mark before APT28 is followed by a word, so it can't close the
+    # The mark before APT28 is followed by a letter, so it can't close the
     # unclosed quote: that quote would swallow the sentences up to it, check
     # the gap text as a name, hide the trend word and leave APT28 unchecked.
     # The "27" count is the second fact of the inch mark.
     result = evaluate(prose, _ACTORS)
     assert [(f.check, f.text) for f in result.findings if f.check in FACT_CHECKS] == found
+    assert (result.facts_verified, result.facts_total) == facts
+
+
+@pytest.mark.parametrize(
+    ("prose", "names", "trends", "facts"),
+    [
+        (
+            'Officials link _"Fake Zebra"_ and _"APT28"_ to it.',
+            [('Officials link _"Fake Zebra"_ and _"APT28"_ to it.', "fake zebra")],
+            [],
+            (1, 2),
+        ),
+        (
+            'Officials link __"Fake Zebra"__ to it.',
+            [('Officials link __"Fake Zebra"__ to it.', "fake zebra")],
+            [],
+            (0, 1),
+        ),
+        (
+            'Officials link _"U.S. Fake Zebra"_ to it.',
+            [('Officials link _"U.S. Fake Zebra"_ to it.', "u.s. fake zebra")],
+            [],
+            (0, 1),
+        ),
+        (
+            'Officials link _"Fake Zebra"_ to it. Vendors saw a surge. Others cite "(APT28)" too.',
+            [
+                ('Officials link _"Fake Zebra"_ to it.', "fake zebra"),
+                ('Others cite "(APT28)" too.', "(apt28)"),
+            ],
+            ["Vendors saw a surge."],
+            (0, 3),
+        ),
+    ],
+    ids=["emphasis", "strong emphasis", "emphasis around U.S.", "emphasis, then a trend word"],
+)
+def test_a_straight_quote_in_underscore_emphasis_is_checked(
+    prose: str, names: list[tuple[str, str]], trends: list[str], facts: tuple[int, int]
+) -> None:
+    # Markdown's _ is a word character but not a letter or digit, so a
+    # closing mark before it still closes the quote.
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (t, f"{q!r} is not in any pulse name or tag") for t, q in names
+    ]
+    assert [f.text for f in result.findings if f.check == "comparison_without_baseline"] == trends
     assert (result.facts_verified, result.facts_total) == facts
 
 
@@ -1370,8 +1416,21 @@ def test_a_straight_quote_opening_with_a_space_is_not_checked(space: str) -> Non
     assert (result.facts_verified, result.facts_total) == (0, 0)
 
 
+@pytest.mark.parametrize(
+    "prose",
+    ['Officials link "Fake Zebra"to it.', 'Officials link "Fake Zebra"s operators.'],
+    ids=["letter after the close", "s after the close"],
+)
+def test_a_straight_quote_closed_before_a_letter_is_not_checked(prose: str) -> None:
+    # Known limit, pinned: a closing mark followed by a letter or digit closes
+    # nothing, and the mark itself then opens a quote that never closes.
+    result = evaluate(prose, _ACTORS)
+    assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
 def test_unclosed_straight_quotes_stay_fast() -> None:
-    # No straight quote mark here can close: each is followed by a word.
+    # No straight quote mark here can close: each is followed by a letter.
     marks = '"a' * 20_000
     md = _brief(f"Routerbot ships {marks} (id={ID_A})")
     assert _timed_evaluate(md, SYNTH) < 5.0
