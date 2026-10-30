@@ -1,7 +1,16 @@
-# Keeps the SHA-pinned GitHub Actions current. Dependabot opens a weekly PR
-# that bumps each action's commit hash (and the trailing `# vX.Y.Z` comment)
-# to the latest release — the mechanism that surfaces runtime deprecations
-# (e.g. Node 20 -> Node 24) before they break the scheduled pipeline.
+# Keeps the repo's pinned versions current. Each entry opens one grouped PR:
+#
+# - github-actions (weekly): the SHA-pinned actions in .github/workflows/.
+#   Each bump moves an action's commit hash (and the trailing `# vX.Y.Z`
+#   comment) to the latest release — the mechanism that surfaces runtime
+#   deprecations (e.g. Node 20 -> Node 24) before they break the scheduled
+#   pipeline.
+# - pre-commit (monthly): the hook `rev`s in .pre-commit-config.yaml, so the
+#   local hooks (ruff, mypy, gitleaks, ...) don't drift behind CI.
+# - terraform (monthly): the provider constraints in infra/*.tf
+#   (hashicorp/aws).
+# - uv at / (monthly): the app env's uv.lock (root pyproject.toml).
+# - uv at /transform (monthly): the separate dbt env's transform/uv.lock.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -14,5 +23,49 @@ updates:
     # One grouped PR for all action bumps rather than one PR per action.
     groups:
       github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+    groups:
+      pre-commit:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "terraform"
+    directory: "/infra"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+    groups:
+      terraform:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+    groups:
+      uv-root:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "uv"
+    directory: "/transform"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+    groups:
+      uv-transform:
         patterns:
           - "*"

@@ -24,6 +24,7 @@ permissions:
   contents: read
 
 env:
+  # Moves with the gitleaks rev in .pre-commit-config.yaml; this one is bumped by hand.
   GITLEAKS_VERSION: 8.21.2
 
 jobs:
