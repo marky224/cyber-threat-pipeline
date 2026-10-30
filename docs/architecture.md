@@ -7,6 +7,7 @@ This document is the annotated companion to the high-level diagram in the [READM
 ```mermaid
 flowchart TB
     OTX[AlienVault OTX<br/>threat intel feed]
+    Feeds[CISA KEV · FIRST EPSS<br/>exploited CVEs · exploit scores]
 
     subgraph GH["GitHub Actions"]
         Cron(["Weekly cron · Mon 13:23 UTC<br/>+ workflow_dispatch"])
@@ -14,6 +15,7 @@ flowchart TB
 
     subgraph App["Python ETL · uv · Python 3.12"]
         Ingest["ingestion<br/>extract → transform → load<br/>watermark-driven upsert"]
+        Enrich["enrichment<br/>KEV catalog + EPSS scores<br/>validated · warn-only"]
         Analysis["analysis<br/>LLM analyst brief<br/>Claude primary · 5 providers swappable<br/>any 2 side-by-side"]
     end
 
@@ -43,11 +45,13 @@ flowchart TB
     end
 
     OTX --> Ingest
+    Feeds --> Enrich
     Cron -.dispatches.-> Ingest
     Cron -.dispatches.-> DBT
     Cron -.dispatches.-> Analysis
     Cron -.dispatches.-> Build
     Ingest --> Raw
+    Enrich --> Raw
     Raw --> DBT
     DBT --> Marts
     Marts --> Analysis
@@ -69,6 +73,12 @@ flowchart TB
 
 **AlienVault OTX** — public threat-intelligence feed (pulses, indicators, references). Accessed via the `OTXv2` Python SDK. The pipeline is read-only against OTX and uses a `modified_since` watermark for incremental fetches.
 
+**CISA KEV** — the Known Exploited Vulnerabilities catalog, CISA's list of CVEs exploited in the wild (CC0). The whole JSON feed is downloaded each run from cisa.gov, or from CISA's `cisagov/kev-data` GitHub mirror if cisa.gov fails.
+
+**FIRST EPSS** — the Exploit Prediction Scoring System: per CVE, the probability of exploitation in the next 30 days and its percentile. Looked up through FIRST's API (marked BETA by FIRST) for the CVE ids the corpus holds, in batches of at most 100 ids.
+
+Neither feed needs a key. Both are treated as untrusted input; see `enrichment/` below.
+
 ### Orchestration
 
 **GitHub Actions** — two workflows:
@@ -80,10 +90,11 @@ No other scheduler exists. The Makefile is the single source of truth for stage 
 
 ### Python application (`cyber_threat_pipeline/`)
 
-Python 3.12, managed by `uv` (lockfile is authoritative). Three subpackages:
+Python 3.12, managed by `uv` (lockfile is authoritative). Four subpackages:
 
 - `core/` — config (`pydantic-settings`), logging, Neon connection helpers.
 - `ingestion/` — `extract` (OTX SDK) → `transform` (pandas) → `load` (idempotent `INSERT … ON CONFLICT` upsert into Neon's `raw` schema). Watermark lives in `pipeline.state.modified_since`.
+- `enrichment/` — CISA KEV and FIRST EPSS for the corpus's CVE indicators, upserted into `raw.kev_vulnerabilities` / `raw.epss_scores`. Every download is HTTPS-only, size-capped, time-boxed and retried at most three times; every response is validated whole (strict types, CVE-id patterns, counts) or dropped. A feed that is down or invalid keeps its stored snapshot, and the step exits 0.
 - `analysis/` — LLM analyst brief. Reads from `marts`, prompts the configured **primary** and **secondary** providers (Claude · Grok · GPT · Gemini · local Ollama), writes a side-by-side markdown page consumed by Evidence.
 
 The analyst is provider-agnostic by design: a single env-var (`ANALYSIS_PRIMARY_PROVIDER`) swaps the model behind the brief, and any two providers render in tabbed comparison on the same input. Claude is the production primary; the code default is `local` (Ollama) so dev/CI runs without any cloud API keys.

@@ -31,11 +31,12 @@ help:
 	@echo ""
 	@echo "  Pipeline stages (each wired to its phase)"
 	@echo "    ingest          [phase 2] OTX → Neon raw schema"
+	@echo "    enrich          [ready]   CISA KEV + FIRST EPSS → Neon raw schema (warn-only)"
 	@echo "    transform       [phase 3] dbt build (isolated transform/ env)"
 	@echo "    record-dbt      [phase 7] dbt test counts → latest pipeline.runs row"
 	@echo "    analysis        [phase 4] LLM analyst brief (Grok + Claude)"
 	@echo "    report          [phase 5] build Evidence site + deploy to S3/CloudFront"
-	@echo "    all             ingest → transform → record-dbt → analysis → report"
+	@echo "    all             ingest → enrich → transform → record-dbt → analysis → report"
 	@echo ""
 	@echo "  Housekeeping"
 	@echo "    clean           remove caches and build artifacts"
@@ -76,6 +77,17 @@ precommit:
 .PHONY: ingest
 ingest:
 	uv run python -m cyber_threat_pipeline.ingestion
+
+# CVE enrichment: CISA KEV + FIRST EPSS (warn-only)
+# Downloads the CISA KEV catalog and FIRST EPSS scores for the corpus's CVE
+# ids into raw.kev_vulnerabilities / raw.epss_scores (sql/32_kev_epss.sql).
+# Reads NEON_DATABASE_URL from the environment (not .env), like record-dbt.
+# Warn-only: a feed that is down or invalid keeps its stored snapshot and the
+# target still exits 0; only a database error or a bug fails it.
+.PHONY: enrich
+enrich:
+	@: "$${NEON_DATABASE_URL:?NEON_DATABASE_URL is required}"
+	uv run python -m cyber_threat_pipeline.enrichment
 
 # [phase 3] Transform — spec: _private/specs/03-dbt-transform.md
 # dbt lives in its own isolated env under transform/ (own pyproject + venv).
@@ -130,7 +142,7 @@ report:
 		--paths "/*"
 
 .PHONY: all
-all: ingest transform record-dbt analysis report
+all: ingest enrich transform record-dbt analysis report
 
 # ---------------------------------------------------------------------------
 # Housekeeping

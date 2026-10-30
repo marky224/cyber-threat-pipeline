@@ -7,6 +7,7 @@ nothing leaves the process. ``block_real_http`` makes any real send fail.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -124,3 +125,44 @@ def block_real_http(monkeypatch: pytest.MonkeyPatch) -> None:
         raise AssertionError("a test tried to use the network")
 
     monkeypatch.setattr("requests.adapters.HTTPAdapter.send", refuse)
+
+
+def kev_body(cve_ids: list[str], *, version: str = "2026.10.29", name: str = "name") -> bytes:
+    """A valid KEV catalog body listing ``cve_ids``."""
+    entries = [
+        {
+            "cveID": cve_id,
+            "vendorProject": "Vendor",
+            "product": "Product",
+            "vulnerabilityName": f"{cve_id} {name}",
+            "dateAdded": "2026-10-01",
+            "knownRansomwareCampaignUse": "Unknown",
+        }
+        for cve_id in cve_ids
+    ]
+    catalog = {
+        "catalogVersion": version,
+        "dateReleased": "2026-10-29T19:09:34.4003Z",
+        "count": len(entries),
+        "vulnerabilities": entries,
+    }
+    return json.dumps(catalog).encode()
+
+
+def epss_body(scores: dict[str, str], *, total: int | None = None) -> bytes:
+    """A valid EPSS API body scoring each id in ``scores`` (epss as a decimal string)."""
+    data = [
+        {"cve": cve_id, "epss": epss, "percentile": "0.5", "date": "2026-10-29"}
+        for cve_id, epss in scores.items()
+    ]
+    body = {
+        "status": "OK",
+        "status-code": 200,
+        "version": "1.0",
+        "access": "public",
+        "total": len(data) if total is None else total,
+        "offset": 0,
+        "limit": 100,
+        "data": data,
+    }
+    return json.dumps(body).encode()

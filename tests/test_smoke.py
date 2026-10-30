@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import cyber_threat_pipeline
-from cyber_threat_pipeline import analysis, core, ingestion
+from cyber_threat_pipeline import analysis, core, enrichment, ingestion
 
 
 def test_package_version_is_defined() -> None:
@@ -15,3 +15,4 @@ def test_subpackages_import() -> None:
     assert core.__name__ == "cyber_threat_pipeline.core"
     assert ingestion.__name__ == "cyber_threat_pipeline.ingestion"
     assert analysis.__name__ == "cyber_threat_pipeline.analysis"
+    assert enrichment.__name__ == "cyber_threat_pipeline.enrichment"

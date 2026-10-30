@@ -12,6 +12,7 @@ AlienVault OTX
    ▼
 Python ETL (cyber_threat_pipeline/ingestion)
    │  extract → transform (pandas) → load (idempotent upsert)
+   │  + enrichment: CISA KEV catalog + FIRST EPSS scores for the CVE ids
    ▼
 Neon Postgres ── raw schema ──►  dbt (transform/)  ──► marts schema
    │                                                      │
@@ -79,6 +80,7 @@ Every stage is reproducible locally with the same `make` target — local dev an
 |---|---|
 | Warehouse | Neon (serverless Postgres, pooled connection) |
 | Ingestion | Python 3.12, `uv`, pandas, `OTXv2` SDK |
+| Enrichment | CISA KEV catalog (JSON feed) + FIRST EPSS API · `requests` with strict bounds · strict `pydantic` validation |
 | Transformation | dbt Core (Postgres adapter) |
 | Reporting | Evidence.dev → S3 + CloudFront (us-east-1) |
 | Monitoring | Grafana Cloud (free tier) |
@@ -93,6 +95,7 @@ Every stage is reproducible locally with the same `make` target — local dev an
 cyber_threat_pipeline/      Python app package
 ├── core/                   Config (pydantic-settings), logging, Neon connection helpers
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
+├── enrichment/             CISA KEV + FIRST EPSS for the corpus's CVE ids → `raw` · bounded downloads · validated whole · warn-only
 └── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
 sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
 transform/                  dbt Core (isolated env) · 10 marts · staging → intermediate → marts · schema + data tests
