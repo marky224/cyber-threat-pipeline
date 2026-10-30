@@ -98,6 +98,25 @@ def test_a_broken_response_is_rejected_whole(
     assert problem in str(e.value)
 
 
+@pytest.mark.parametrize(
+    "score",
+    ["1E-1000000", "0." + "1" * 20_000, "0.1234567891"],
+    ids=["tiny-exponent", "20000-digits", "10-places"],
+)
+def test_a_score_that_does_not_fit_numeric_10_9_is_rejected(score: str) -> None:
+    # raw.epss_scores.epss is numeric(10, 9): anything parse accepts must fit it.
+    with pytest.raises(FeedInvalid, match="epss"):
+        parse(_mutated(lambda r: _row(r).update(epss=score)), REQUESTED)
+
+
+@pytest.mark.parametrize("zero", ["0E-1000000", "0E+1000000", "0E-20", "0"])
+def test_zero_with_any_exponent_is_kept_at_9_places(zero: str) -> None:
+    # Zero passes any precision check, but Postgres can't take 0E-1000000.
+    [score] = parse(_mutated(lambda r: _row(r).update(epss=zero)), REQUESTED)[:1]
+    assert score.epss == 0
+    assert score.epss.as_tuple().exponent == -9
+
+
 @pytest.mark.parametrize("body", [b"", b"<html>rate limited</html>", b"[]", b"null"])
 def test_a_body_that_is_not_a_response_object_is_rejected(body: bytes) -> None:
     with pytest.raises(FeedInvalid, match="EPSS response rejected"):

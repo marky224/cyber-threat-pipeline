@@ -126,6 +126,24 @@ def test_a_body_that_is_not_a_catalog_object_is_rejected(body: bytes) -> None:
         parse(body)
 
 
+def test_control_characters_in_the_catalog_version_are_flattened() -> None:
+    # Postgres can't store a NUL: it must never get past parse.
+    catalog = parse(_mutated(lambda c: c.update(catalogVersion="2026.10.29\u0000")))
+    assert catalog.catalog_version == "2026.10.29"
+
+
+def test_a_release_time_postgres_cannot_store_is_rejected() -> None:
+    # Year 1 at +23:00 is before year 1 in UTC: Postgres rejects it.
+    with pytest.raises(FeedInvalid, match="dateReleased"):
+        parse(_mutated(lambda c: c.update(dateReleased="0001-01-01T00:00:00+23:00")))
+
+
+def test_the_release_time_is_kept_in_utc() -> None:
+    catalog = parse(_mutated(lambda c: c.update(dateReleased="2026-10-29T19:09:34+20:00")))
+    assert catalog.released_at == datetime(2026, 10, 28, 23, 9, 34, tzinfo=UTC)
+    assert catalog.released_at.tzinfo is UTC
+
+
 def test_rejection_messages_never_quote_the_feed() -> None:
     marker = "INJECTED-FEED-TEXT"
     with pytest.raises(FeedInvalid) as e:

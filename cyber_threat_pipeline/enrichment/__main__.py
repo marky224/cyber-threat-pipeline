@@ -10,10 +10,13 @@
    at least one id must come back scored.
 4. A fresh connection writes each feed that passed, each in its own transaction.
 
-A feed problem (``FetchError``, ``FeedInvalid``) logs a warning, keeps that
-feed's stored snapshot and leaves the other feed alone; the step still exits 0.
-A database error or a bug raises (exit 1); pipeline.yml runs the step with
-``continue-on-error`` so even that never blocks the publish. Reads
+A feed problem logs a warning, keeps that feed's stored snapshot and leaves the
+other feed alone; the step still exits 0. A feed problem is a ``FetchError``, a
+``FeedInvalid``, or rows the database refuses to store (``psycopg.DataError`` /
+``IntegrityError``, which roll that feed's transaction back; validation should
+already have caught them). Any other database error, such as a lost connection,
+or a bug raises (exit 1); pipeline.yml runs the step with ``continue-on-error`` so
+even that never blocks the publish. Reads
 ``NEON_DATABASE_URL`` from the environment, as ``make record-dbt`` does.
 """
 
@@ -38,6 +41,9 @@ logger = logging.getLogger(__name__)
 KEV_BUDGET = 120.0
 EPSS_BUDGET = 240.0
 
+# Errors that mean "the database won't store these rows", not "the database is gone".
+_REJECTED = (psycopg.DataError, psycopg.IntegrityError)
+
 
 def run(database_url: str, session: requests.Session | None = None) -> int:
     """Fetch both feeds and write the ones that passed. Returns the exit code."""
@@ -50,11 +56,26 @@ def run(database_url: str, session: requests.Session | None = None) -> int:
         return 0
     with psycopg.connect(database_url, autocommit=True) as conn:
         if catalog is not None:
-            written = load.write_kev(conn, catalog)
-            logger.info("KEV: stored %d entries (catalog %s)", written, catalog.catalog_version)
+            try:
+                written = load.write_kev(conn, catalog)
+            except _REJECTED as e:
+                # The class name only: the message can quote the feed's row.
+                logger.warning(
+                    "KEV: the database rejected the catalog (%s); the stored snapshot stays",
+                    type(e).__name__,
+                )
+            else:
+                logger.info("KEV: stored %d entries (catalog %s)", written, catalog.catalog_version)
         if scores is not None:
-            written = load.write_epss(conn, scores)
-            logger.info("EPSS: stored %d scores", written)
+            try:
+                written = load.write_epss(conn, scores)
+            except _REJECTED as e:
+                logger.warning(
+                    "EPSS: the database rejected the scores (%s); the stored scores stay",
+                    type(e).__name__,
+                )
+            else:
+                logger.info("EPSS: stored %d scores", written)
     return 0
 
 

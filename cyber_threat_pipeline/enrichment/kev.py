@@ -4,13 +4,17 @@ The catalog is untrusted input, accepted whole or not at all. ``parse`` returns
 a ``KevCatalog`` only when the body:
 
 - parses as one JSON object with ``catalogVersion`` (1-32 characters),
-  ``dateReleased`` (a timestamp with a time zone), ``count`` (an integer of at
+  ``dateReleased`` (a timestamp with a time zone, kept in UTC; one that falls
+  outside the years 1-9999 in UTC is rejected), ``count`` (an integer of at
   least 1) and ``vulnerabilities`` (a list of exactly ``count`` entries);
 - gives every entry a ``cveID`` matching ``CVE_ID_PATTERN`` and a ``dateAdded``
   date, with no ``cveID`` twice;
 - keeps ``vendorProject``, ``product`` and ``vulnerabilityName`` to 500
-  characters and ``knownRansomwareCampaignUse`` to 32 (each optional), after
-  control characters become spaces and whitespace runs one space.
+  characters and ``knownRansomwareCampaignUse`` to 32 (each optional).
+
+Every stored string (``catalogVersion`` too) has its control characters turned
+into spaces and its whitespace runs collapsed before the length check, so no
+NUL reaches Postgres. Anything ``parse`` accepts fits the raw table.
 
 Types are strict: a number where text belongs fails, and so does a string where
 ``count`` belongs. Other keys (``shortDescription``, ``requiredAction``,
@@ -23,10 +27,11 @@ short reason that never quotes feed content.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Self
 
 from pydantic import (
+    AfterValidator,
     AwareDatetime,
     BaseModel,
     BeforeValidator,
@@ -58,7 +63,16 @@ def _clean(value: object) -> object:
     return value
 
 
+def _utc(value: datetime) -> datetime:
+    """The same instant in UTC; one outside Python's (and Postgres') years fails."""
+    try:
+        return value.astimezone(UTC)
+    except OverflowError:
+        raise ValueError("timestamp out of range in UTC") from None
+
+
 CveId = Annotated[str, StringConstraints(pattern=CVE_ID_PATTERN)]
+_Version = Annotated[str, BeforeValidator(_clean), StringConstraints(min_length=1, max_length=32)]
 _Name = Annotated[str, BeforeValidator(_clean), StringConstraints(max_length=500)]
 _Label = Annotated[str, BeforeValidator(_clean), StringConstraints(max_length=32)]
 _STRICT = ConfigDict(strict=True, extra="ignore", frozen=True)
@@ -84,10 +98,8 @@ class KevCatalog(BaseModel):
 
     model_config = _STRICT
 
-    catalog_version: Annotated[str, StringConstraints(min_length=1, max_length=32)] = Field(
-        alias="catalogVersion"
-    )
-    released_at: AwareDatetime = Field(alias="dateReleased")
+    catalog_version: _Version = Field(alias="catalogVersion")
+    released_at: Annotated[AwareDatetime, AfterValidator(_utc)] = Field(alias="dateReleased")
     count: int = Field(ge=1)
     entries: tuple[KevEntry, ...] = Field(alias="vulnerabilities")
 

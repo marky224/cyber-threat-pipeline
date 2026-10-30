@@ -14,7 +14,10 @@ its scores only when the body:
   ``data`` list of exactly ``total`` rows (a ``total`` above the rows returned
   means the answer was cut short);
 - gives every row a ``cve`` this request asked for, at most once, an ``epss``
-  and a ``percentile`` that are finite decimals from 0 to 1, and a ``date``.
+  and a ``percentile`` that are finite decimals from 0 to 1 with at most 9
+  decimal places (they must fit ``numeric(10, 9)``: no ``1E-1000000``, no
+  20,000-digit fraction; a zero is written at 9 places too, so ``0E-1000000``
+  fits), and a ``date``.
 
 An id FIRST doesn't score simply has no row. Failures raise ``FeedInvalid``
 with a short reason that never quotes feed content.
@@ -27,7 +30,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError
 
 from cyber_threat_pipeline.enrichment import FeedInvalid
 from cyber_threat_pipeline.enrichment.kev import CveId
@@ -38,7 +41,20 @@ MAX_PARAM_CHARS = 2000
 MAX_BYTES = 1024 * 1024  # 100 rows are ~10 KB
 MAX_CVES = 5000  # newest first; the 2026-10-14 corpus held under 2,070 CVE indicators
 
-_Score = Annotated[Decimal, Field(ge=0, le=1, allow_inf_nan=False)]
+_NINE_PLACES = Decimal("1E-9")
+
+
+def _nine_places(value: Decimal) -> Decimal:
+    """Write the score at 9 places: zero passes any precision check as 0E-1000000."""
+    return value.quantize(_NINE_PLACES)
+
+
+# Matches raw.epss_scores' numeric(10, 9): FIRST publishes 9 decimal places.
+_Score = Annotated[
+    Decimal,
+    Field(ge=0, le=1, max_digits=10, decimal_places=9, allow_inf_nan=False),
+    AfterValidator(_nine_places),
+]
 _STRICT = ConfigDict(strict=True, extra="ignore", frozen=True)
 
 

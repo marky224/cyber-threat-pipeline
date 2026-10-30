@@ -8,6 +8,7 @@ exactly as it was, leave the other feed alone, and still return 0.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -220,6 +221,69 @@ def test_both_feeds_failing_still_exits_0(pg_url: str, pg_conn: psycopg.Connecti
     stored = _store_kev(pg_conn, ["CVE-2026-0001"])
     _run(pg_url, {CISA: DOWN[:], MIRROR: DOWN[:]})
     assert _table(pg_conn, "kev_vulnerabilities") == stored
+
+
+def test_a_nul_in_the_catalog_version_never_reaches_the_database(
+    pg_url: str, corpus: psycopg.Connection
+) -> None:
+    body = json.loads(KEV_RECORDED)
+    body["catalogVersion"] = "2026.10.29\u0000"
+    _run(
+        pg_url, {CISA: [Reply(body=json.dumps(body).encode())], FIRST: [Reply(body=EPSS_RECORDED)]}
+    )
+    assert {r[6] for r in _table(corpus, "kev_vulnerabilities")} == {"2026.10.29"}
+    assert len(_table(corpus, "epss_scores")) == 4
+
+
+def test_an_epss_score_postgres_cannot_store_is_a_warning(
+    pg_url: str, corpus: psycopg.Connection, caplog: pytest.LogCaptureFixture
+) -> None:
+    stored = _store_epss(corpus, EPSS_IDS[:2])
+    body = json.loads(EPSS_RECORDED)
+    body["data"][0]["epss"] = "1E-1000000"
+    _run(pg_url, {CISA: [Reply(body=KEV_RECORDED)], FIRST: [Reply(body=json.dumps(body).encode())]})
+    assert _table(corpus, "epss_scores") == stored
+    assert len(_table(corpus, "kev_vulnerabilities")) == 12
+    assert "EPSS failed: EPSS response rejected" in caplog.text
+
+
+def test_rows_the_database_rejects_keep_that_feeds_snapshot_and_the_other_feed_is_written(
+    pg_url: str,
+    corpus: psycopg.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stored = _store_kev(corpus, ["CVE-2021-44228"])
+
+    def write_a_row_the_check_rejects(conn: psycopg.Connection, catalog: object) -> int:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute(
+                "insert into raw.kev_vulnerabilities"
+                " (cve_id, date_added, catalog_version, catalog_released_at)"
+                " values ('not-a-cve', '2026-10-01', 'x', now())"
+            )
+        return 1
+
+    monkeypatch.setattr(load, "write_kev", write_a_row_the_check_rejects)
+    _run(pg_url, {CISA: [Reply(body=KEV_RECORDED)], FIRST: [Reply(body=EPSS_RECORDED)]})
+    assert _table(corpus, "kev_vulnerabilities") == stored
+    assert len(_table(corpus, "epss_scores")) == 4
+    assert "KEV: the database rejected the catalog (CheckViolation)" in caplog.text
+    assert "not-a-cve" not in caplog.text
+
+
+def test_a_lost_connection_while_writing_still_raises(
+    pg_url: str, corpus: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def lose_the_connection(conn: psycopg.Connection, catalog: object) -> int:
+        raise psycopg.OperationalError("server closed the connection unexpectedly")
+
+    monkeypatch.setattr(load, "write_kev", lose_the_connection)
+    session, _ = session_with(
+        {CISA: [Reply(body=KEV_RECORDED)], FIRST: [Reply(body=EPSS_RECORDED)]}
+    )
+    with pytest.raises(psycopg.OperationalError):
+        enrich.run(pg_url, session=session)
 
 
 def test_a_database_error_is_not_swallowed(pg_url: str) -> None:

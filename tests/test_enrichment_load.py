@@ -88,6 +88,17 @@ def test_every_stored_field_round_trips(pg_conn: psycopg.Connection) -> None:
         assert cur.fetchone() == ("Vendor", "Product", "2026-10-01", "Unknown", True)
 
 
+def test_every_score_parse_accepts_fits_the_table(pg_conn: psycopg.Connection) -> None:
+    requested = ["CVE-2026-0001", "CVE-2026-0002", "CVE-2026-0003"]
+    body = epss_body(
+        {"CVE-2026-0001": "0E-1000000", "CVE-2026-0002": "1", "CVE-2026-0003": "0.000000001"}
+    )
+    assert load.write_epss(pg_conn, epss.parse(body, requested)) == 3
+    with pg_conn.cursor() as cur:
+        cur.execute("select epss::text from raw.epss_scores order by cve_id")
+        assert [r[0] for r in cur.fetchall()] == ["0.000000000", "1.000000000", "0.000000001"]
+
+
 def test_epss_scores_update_in_place(pg_conn: psycopg.Connection) -> None:
     requested = ["CVE-2026-0001", "CVE-2026-0002"]
     load.write_epss(pg_conn, epss.parse(epss_body(dict.fromkeys(requested, "0.1")), requested))
