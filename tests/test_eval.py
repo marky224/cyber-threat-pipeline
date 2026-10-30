@@ -1429,11 +1429,18 @@ def test_a_straight_quote_closed_before_a_letter_is_not_checked(prose: str) -> N
     assert (result.facts_verified, result.facts_total) == (0, 0)
 
 
-@pytest.mark.parametrize("name", ["_Fake Zebra_", "*Fake Zebra*"], ids=["underscore", "asterisk"])
-def test_an_unclosed_quote_pairs_with_a_later_quote_that_starts_with_emphasis(name: str) -> None:
-    # Known limit, pinned: the mark before "_" or "*" may close, so it closes
-    # the unclosed "hi. and the text between the two marks reads as one name:
-    # its sentences merge, and the trend word in them sits inside the quote.
+@pytest.mark.parametrize(
+    "name",
+    ["_Fake Zebra_", "*Fake Zebra*", " Fake Zebra"],
+    ids=["underscore", "asterisk", "space"],
+)
+def test_an_unclosed_quote_pairs_with_a_later_quote_not_starting_with_a_letter_or_digit(
+    name: str,
+) -> None:
+    # Known limit, pinned: the mark before anything but a letter or digit may
+    # close, so it closes the unclosed "hi. and the text between the two marks
+    # reads as one name: its sentences merge, and the trend word in them sits
+    # inside the quote.
     prose = f'He said "hi. Vendors saw a surge. Officials link "{name}" to it.'
     result = evaluate(prose, _ACTORS)
     assert _name_findings(prose) == [
