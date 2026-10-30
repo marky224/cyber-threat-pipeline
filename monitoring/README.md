@@ -1,7 +1,7 @@
 # monitoring/ — Grafana Cloud dashboards + alerts as code
 
 The **operations** surface (the analyst-facing counterpart lives in
-`reporting/`). Six conceptual panels, five alert rules, all committed as
+`reporting/`). Eight grid panels, six alert rules, all committed as
 JSON / YAML — the Grafana Cloud tenant is configured by importing these
 artifacts, no click-around state lives outside the repo.
 
@@ -21,8 +21,8 @@ canonical SQL, alert semantics, and the eight acceptance criteria.
 
 | File | Purpose |
 |---|---|
-| `dashboard.json` | One Grafana dashboard, seven grid panels (Panel 3 is split into two stat halves per spec §3.3). Schema v39, refresh 5m, default range last 90 days. |
-| `alerts.yaml` | Five alert rules in Grafana's `apiVersion: 1` provisioning format: freshness >8d (critical), run-failure (warning), volume anomaly drift-or-zero (warning), dbt test failures (warning), analyst-brief grounding below 90% (warning). |
+| `dashboard.json` | One Grafana dashboard, eight grid panels (Panel 3 is split into two stat halves per spec §3.3). Schema v39, refresh 5m, default range last 90 days. |
+| `alerts.yaml` | Five alert rules in Grafana's `apiVersion: 1` provisioning format: freshness >8d (critical), run-failure (warning), volume anomaly drift-or-zero (warning), dbt test failures (warning), analyst-brief grounding below 90% (warning), a vulnerability feed (CISA KEV or FIRST EPSS) last fetched over 15 days ago (warning). |
 | `datasource.example.yaml` | Postgres datasource provisioning template — no secrets. |
 | `README.md` | This file. |
 
@@ -84,8 +84,8 @@ In Grafana Cloud → Dashboards → New → Import → Upload JSON file →
 `monitoring/dashboard.json`. Grafana prompts for the `DS_NEON_RO`
 input — pick the `neon_ro` datasource you just created.
 
-The dashboard contains seven grid panels: the six in the layout from spec §7
-plus panel 7 below them. With
+The dashboard contains eight grid panels: the six in the layout from spec §7,
+panel 7 below them and panel 8 below that. With
 fewer than 2 successful `pipeline.runs` rows, time-series panels render
 as a single dot or empty plot — this is expected (the seed fixture
 only inserts one row). Real-world meaningful rendering kicks in after
@@ -102,6 +102,19 @@ judge's % of claims supported. Apply `sql/31_brief_evals.sql` to Neon before
 re-importing, or the panel errors; the table fills from the next
 `make analysis` run. Rule `ctp-brief-grounding` alerts on the same table.
 
+Panel 8 ("Vulnerability feeds") shows, in days, how old the CISA KEV and FIRST
+EPSS snapshots are: `now()` minus `kev_fetched_at` / `epss_fetched_at` from
+`marts.mart_data_quality`, i.e. since `make enrich` last fetched each feed
+successfully. `make enrich` is warn-only (a feed that is down or invalid keeps
+its old snapshot and the run still succeeds), so this age is how a failing feed
+shows: under 8 green, 8-15 yellow, over 15 red, never fetched "never". Rule
+`ctp-vuln-feed-stale` fires above 15 days (two missed weekly fetches), counting
+a never-fetched feed as 999. The columns come from the dbt models that ship
+with `make enrich`, so apply `sql/32_kev_epss.sql` to Neon and let one weekly
+run with them finish before re-importing the dashboard, and provision the rule
+only once that run has fetched both feeds: until then a never-fetched feed
+fires it.
+
 ### state-timeline plugin
 
 Panel 1 ("Run health over time") uses the `state-timeline` panel type.
@@ -111,7 +124,7 @@ found", install `grafana-statetimeline-panel` from the plugin catalog.
 
 ## Provision the alert rules
 
-`alerts.yaml` carries five rules with the placeholder
+`alerts.yaml` carries six rules with the placeholder
 `<NEON_RO_UID>` everywhere a datasource UID is referenced. Before
 provisioning, substitute it with the actual UID from your Grafana
 tenant:

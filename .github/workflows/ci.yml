@@ -304,7 +304,7 @@ jobs:
           d = yaml.safe_load(open('monitoring/alerts.yaml'))
           assert d['apiVersion'] == 1, 'alerts.yaml: apiVersion != 1'
           rules = d['groups'][0]['rules']
-          assert len(rules) == 5, f'alerts.yaml: expected 5 rules, got {len(rules)}'
+          assert len(rules) == 6, f'alerts.yaml: expected 6 rules, got {len(rules)}'
           print(f'OK alerts.yaml — {len(rules)} rules')
           "
 

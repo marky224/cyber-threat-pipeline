@@ -40,8 +40,8 @@ flowchart TB
     end
 
     subgraph Ops["Grafana Cloud · free tier"]
-        Dash["Operational dashboard<br/>5 panels"]
-        Alerts["4 alert rules<br/>JSON + YAML provisioned"]
+        Dash["Operational dashboard<br/>8 panels"]
+        Alerts["6 alert rules<br/>JSON + YAML provisioned"]
     end
 
     OTX --> Ingest
@@ -145,8 +145,8 @@ The OIDC provider is a `data` lookup (not a `resource`) so the same Terraform ap
 
 Grafana Cloud free tier. Two artifacts checked into git:
 
-- `dashboard.json` — the operational dashboard (5 panels: run health over time, ingestion volume and drift, freshness (pipeline and intel), dbt test results over time, data-quality trends).
-- `alerts.yaml` — 4 alert rules (run failure, stale data, dbt test regression, ingest row-count drop), eval interval 900s.
+- `dashboard.json` — the operational dashboard (8 panels: run health over time, ingestion volume and drift, freshness (pipeline and intel), dbt test results over time, data-quality trends, analyst-brief grounding, vulnerability-feed age).
+- `alerts.yaml` — 6 alert rules (run failure, stale data, dbt test regression, ingest row-count drop, analyst-brief grounding below 90%, a vulnerability feed over 15 days stale), eval interval 900s.
 
 The Grafana datasource is the `grafana_ro` Neon role. The dashboard and alerts are provisioned via the Grafana HTTP API at install time — no UI-edited state. A `<NEON_RO_UID>` placeholder in `alerts.yaml` is substituted at provisioning time from the datasource API response.
 

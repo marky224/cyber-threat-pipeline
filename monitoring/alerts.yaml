@@ -1,11 +1,12 @@
 # Grafana alert-rules provisioning (apiVersion: 1).
 #
-# Five rules:
+# Six rules:
 #   1. ctp-freshness-8d        critical   8-day SLA breach (alert 4.1)
 #   2. ctp-run-failure         warning    any failed/orphaned run in last 24h (alert 4.2)
 #   3. ctp-volume-anomaly      warning    drift OR zero on latest success (alert 4.3)
 #   4. ctp-dbt-test-failures   warning    dbt_tests_failed > 0 on latest run (alert 4.4)
 #   5. ctp-brief-grounding     warning    latest analyst brief < 90% of checked facts verified
+#   6. ctp-vuln-feed-stale     warning    CISA KEV or FIRST EPSS last fetched > 15 days ago
 #
 # Datasource UID placeholder: <NEON_RO_UID>. The operator substitutes this with
 # the actual uid from Grafana Cloud (Configuration → Data sources → neon_ro
@@ -262,6 +263,58 @@ groups:
               conditions:
                 - type: query
                   evaluator: { type: lt, params: [0.9] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+
+      - uid: ctp-vuln-feed-stale
+        title: Vulnerability feed stale > 15 days
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+          component: enrichment
+        annotations:
+          summary: The CISA KEV or FIRST EPSS snapshot is over 15 days old — two weekly fetches in a row failed.
+          description: |
+            v = the older of kev_fetched_at and epss_fetched_at in the latest
+            marts.mart_data_quality row, in days (a feed never fetched counts as
+            999). make enrich is warn-only: a feed that is down or serves
+            something invalid keeps its last good snapshot and the pipeline run
+            still succeeds, so this is the signal. Read the "Enrich CVEs" step log
+            of the recent pipeline.yml runs: each warning names the feed, the host
+            and why (HTTP status, timeout, validation, shrink guard). The site and
+            marts keep showing the stored snapshot meanwhile. No mart row (no
+            successful run yet) gives no data, which ctp-freshness-8d covers.
+          runbook_url: https://github.com/marky224/cyber-threat-pipeline/blob/main/monitoring/README.md
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: <NEON_RO_UID>
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              rawSql: |
+                select greatest(
+                         coalesce(extract(epoch from now() - kev_fetched_at), 999 * 86400),
+                         coalesce(extract(epoch from now() - epss_fetched_at), 999 * 86400)
+                       ) / 86400 as v
+                from marts.mart_data_quality
+                order by run_id desc
+                limit 1;
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - type: query
+                  evaluator: { type: gt, params: [15] }
                   operator: { type: and }
                   query: { params: [C] }
                   reducer: { type: last, params: [] }
