@@ -48,6 +48,12 @@ def test_scores_outside_zero_to_one_are_rejected(
 @pytest.mark.parametrize("table", ["raw.kev_vulnerabilities", "raw.epss_scores"])
 def test_grafana_ro_cannot_read_the_feed_tables(pg_conn: psycopg.Connection, table: str) -> None:
     with pg_conn.cursor() as cur:
+        # As the owner first: "permission denied for schema raw" fires before any
+        # table lookup, so without these a missing or misspelled table would pass.
+        cur.execute("select to_regclass(%s) is not null", (table,))
+        assert cur.fetchone() == (True,), f"{table} does not exist"
+        cur.execute("select has_table_privilege('grafana_ro', %s, 'select')", (table,))
+        assert cur.fetchone() == (False,)
         cur.execute("set role grafana_ro")
         try:
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
