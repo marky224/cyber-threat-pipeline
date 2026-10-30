@@ -29,12 +29,17 @@ Checks (``Finding.check`` codes are stable; Grafana and tests key on them):
   quotes the tag APT28. A quote of nothing but those is no fact. A straight
   quote mark opens a quote only before a non-space and closes it only where
   no letter or digit follows (markdown emphasis may: _"APT28"_), so the inch
-  mark in 'a 27" screen' opens none, and in 'He said "hi. Officials link
-  "APT28"' the unclosed "hi. pairs with nothing and APT28 is checked. A
-  straight quote that opens with a space (any Unicode space: " Fake Zebra")
-  or whose closing mark is followed by a letter or digit ("Fake Zebra"s) is
-  not checked. A curly quote ends at its first ” and can't hold another “. A
-  quote mark left unpaired is plain text, no fact.
+  mark in 'a 27" screen' opens none, and an unclosed quote doesn't pair with
+  a later quote whose text starts with a letter or digit: in 'He said "hi.
+  Officials link "APT28"' the unclosed "hi. pairs with nothing and APT28 is
+  checked. A later quote that starts with _, * or ( inside its marks
+  ("_Fake Zebra_", "*Fake Zebra*", "(APT28)") closes the unclosed quote
+  instead, so the text between the two marks is checked as one name and a
+  trend word there is not flagged. A straight quote that opens with a space
+  (any Unicode space: " Fake Zebra") or whose closing mark is followed by a
+  letter or digit ("Fake Zebra"s) is not checked. A curly quote ends at its
+  first ” and can't hold another “. A quote mark left unpaired is plain text,
+  no fact.
 - ``cve_unknown``: every CVE id appears in an input pulse name or tag.
 - ``number_unsupported``: every number is in the allowed set for its scope and
   unit (rules below).
@@ -191,10 +196,13 @@ _BOLD_LINE = re.compile(r"^\s*\*\*([^*]+)\*\*:?\s*$")
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
 # A straight quote opens only before a non-space, so the inch mark in 'a 27"
 # screen' opens none, and closes only where no letter or digit follows (the _
-# of markdown emphasis may: _"APT28"_), so in 'He said "hi. Officials link
-# "APT28"' the mark before APT28 opens a quote instead of closing "hi. A curly
-# quote can't hold another opening one, so a “ with no ” after it is read up
-# to the next “ (to the end: quadratic).
+# of markdown emphasis may: _"APT28"_). So a later quote whose text starts
+# with a letter or digit doesn't close an unclosed one: in 'He said "hi.
+# Officials link "APT28"' the mark before APT28 opens a quote instead of
+# closing "hi. One that starts with _, * or ( ("_Fake Zebra_", "(APT28)")
+# closes "hi. instead, and the text between the two marks reads as one name.
+# A curly quote can't hold another opening one, so a “ with no ” after it is
+# read up to the next “ (to the end: quadratic).
 _QUOTED = re.compile(r"\"(?=\S)([^\"]+)\"(?![^\W_])|“([^“”]+)”")
 # Trailing punctuation and whitespace (any Unicode space) inside a quote are
 # not part of the name: a US-style brief writes "APT28," "Lazarus." The

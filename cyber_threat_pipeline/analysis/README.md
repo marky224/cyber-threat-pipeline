@@ -107,11 +107,14 @@ written from (`eval.py`, pure and deterministic). The checks:
   straight quote mark opens a quote only before a non-space and closes it
   only where no letter or digit follows (markdown emphasis such as
   `_"APT28"_` is fine), so the inch mark in `a 27" screen` opens none and an
-  unclosed `"hi.` doesn't pair with the quote of a later name. A quote that
-  opens with a space (`" Fake Zebra"`) or whose closing mark is followed by a
-  letter or digit (`"Fake Zebra"s`) is not checked, and a quote mark left
-  unpaired is plain text. A quote is read whole even when it holds an
-  abbreviation
+  unclosed `"hi.` doesn't pair with a later quote whose text starts with a
+  letter or digit. A later quote that starts with `_`, `*` or `(` inside its
+  marks (`"_Fake Zebra_"`, `"*Fake Zebra*"`, `"(APT28)"`) closes the
+  unclosed quote instead, so the text between the two marks is checked as
+  one name and a trend word there is not flagged. A quote that opens with a
+  space (`" Fake Zebra"`) or whose closing mark is followed by a letter or
+  digit (`"Fake Zebra"s`) is not checked, and a quote mark left unpaired is
+  plain text. A quote is read whole even when it holds an abbreviation
   (`"U.S. Fake Operation Zebra"`): no check ends a sentence inside a quote
 - every number is supported for its unit by the pulses its bullet cites
   (CVEs, countries, indicators, governments, pulses, percentages, "about N",

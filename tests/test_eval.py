@@ -1429,6 +1429,20 @@ def test_a_straight_quote_closed_before_a_letter_is_not_checked(prose: str) -> N
     assert (result.facts_verified, result.facts_total) == (0, 0)
 
 
+@pytest.mark.parametrize("name", ["_Fake Zebra_", "*Fake Zebra*"], ids=["underscore", "asterisk"])
+def test_an_unclosed_quote_pairs_with_a_later_quote_that_starts_with_emphasis(name: str) -> None:
+    # Known limit, pinned: the mark before "_" or "*" may close, so it closes
+    # the unclosed "hi. and the text between the two marks reads as one name:
+    # its sentences merge, and the trend word in them sits inside the quote.
+    prose = f'He said "hi. Vendors saw a surge. Officials link "{name}" to it.'
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (prose, "'hi. vendors saw a surge. officials link' is not in any pulse name or tag")
+    ]
+    assert [f for f in result.findings if f.check == "comparison_without_baseline"] == []
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
 def test_unclosed_straight_quotes_stay_fast() -> None:
     # No straight quote mark here can close: each is followed by a letter.
     marks = '"a' * 20_000
