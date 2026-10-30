@@ -46,6 +46,7 @@ repos:
   # GitLeaks — secret scanning. Catches accidental API keys / credentials
   # before they ever reach a commit. CI repeats the scan as a backstop.
   - repo: https://github.com/gitleaks/gitleaks
+    # Moves with GITLEAKS_VERSION in .github/workflows/gitleaks.yml, which is bumped by hand.
     rev: v8.21.2
     hooks:
       - id: gitleaks
