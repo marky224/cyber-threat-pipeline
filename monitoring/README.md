@@ -22,7 +22,7 @@ canonical SQL, alert semantics, and the eight acceptance criteria.
 | File | Purpose |
 |---|---|
 | `dashboard.json` | One Grafana dashboard, eight grid panels (Panel 3 is split into two stat halves per spec §3.3). Schema v39, refresh 5m, default range last 90 days. |
-| `alerts.yaml` | Five alert rules in Grafana's `apiVersion: 1` provisioning format: freshness >8d (critical), run-failure (warning), volume anomaly drift-or-zero (warning), dbt test failures (warning), analyst-brief grounding below 90% (warning), a vulnerability feed (CISA KEV or FIRST EPSS) last fetched over 15 days ago (warning). |
+| `alerts.yaml` | Six alert rules in Grafana's `apiVersion: 1` provisioning format: freshness >8d (critical), run-failure (warning), volume anomaly drift-or-zero (warning), dbt test failures (warning), analyst-brief grounding below 90% (warning), a vulnerability feed (CISA KEV or FIRST EPSS) last fetched over 15 days ago (warning). |
 | `datasource.example.yaml` | Postgres datasource provisioning template — no secrets. |
 | `README.md` | This file. |
 
