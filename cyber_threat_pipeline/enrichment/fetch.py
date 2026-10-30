@@ -8,7 +8,9 @@ The feeds are outside services, so every download is bounded:
   deadline, so each request goes straight to the session's HTTPS adapter. A
   redirect's body is never read; its ``Location`` (a relative one resolved
   against the current URL) must be HTTPS; the deadline is checked again before
-  each hop; and ``params`` go on the first request only. ``new_session`` also
+  each hop; and ``params`` go on the first request only. A ``Location`` that
+  urljoin, requests or urllib3 can't use (``ValueError``, ``InvalidURL``,
+  ``LocationParseError``) fails at once, without a retry. ``new_session`` also
   mounts no ``http://`` adapter, as a backstop, and ignores the environment (no
   proxy variables, no ``~/.netrc`` credentials).
 - A project User-Agent; 10 s to connect, 30 s per read.
@@ -25,7 +27,9 @@ The feeds are outside services, so every download is bounded:
   open longer; the pipeline step's own timeout is the hard stop.
 
 Every failure raises ``FetchError`` with a short reason (host and status or
-exception name), never response content.
+exception class name), never response content. A hop that can't even be
+requested is named by the host that sent the redirect, never by its
+``Location``: the parsers' messages quote the URL, so only the class is kept.
 """
 
 from __future__ import annotations
@@ -106,16 +110,25 @@ def _follow(
     max_bytes: int,
     deadline: float,
 ) -> bytes:
-    """One attempt: the request and up to ``MAX_REDIRECTS`` hops, each one bounded."""
+    """One attempt: the request and up to ``MAX_REDIRECTS`` hops, each one bounded.
+
+    ``sender`` is the host whose redirect led to ``url`` (our own host on the
+    first request); errors about a hop that can't be made name it, not the hop.
+    """
+    host = sender = urlsplit(url).hostname or "?"
     for _ in range(MAX_REDIRECTS + 1):
-        host = urlsplit(url).hostname or "?"
-        answer = _get_once(session, url, params, host, max_bytes, deadline)
+        answer = _get_once(session, url, params, host, sender, max_bytes, deadline)
         if isinstance(answer, bytes):
             return answer
-        url, params = urljoin(url, answer), None
+        sender = host
+        try:
+            url, params = urljoin(url, answer), None
+            host = urlsplit(url).hostname or "?"
+        except ValueError as e:  # e.g. an unclosed IPv6 bracket; the message quotes it
+            raise FetchError(f"{sender}: {type(e).__name__}") from None
         if not url.startswith("https://"):
-            raise FetchError(f"{host}: redirected off HTTPS")
-    raise FetchError(f"{host}: more than {MAX_REDIRECTS} redirects")
+            raise FetchError(f"{sender}: redirected off HTTPS")
+    raise FetchError(f"{sender}: more than {MAX_REDIRECTS} redirects")
 
 
 def _get_once(
@@ -123,6 +136,7 @@ def _get_once(
     url: str,
     params: Mapping[str, str] | None,
     host: str,
+    sender: str,
     max_bytes: int,
     deadline: float,
 ) -> bytes | str:
@@ -131,14 +145,19 @@ def _get_once(
     if left <= 0:
         raise FetchError(f"{host}: time budget spent")
     timeout = (min(CONNECT_TIMEOUT, left), min(READ_TIMEOUT, left))
-    request = session.prepare_request(requests.Request("GET", url, params=params))
     try:
+        request = session.prepare_request(requests.Request("GET", url, params=params))
         # Straight to the adapter (TLS verified, no proxies): Session.send reads a
         # redirect's whole body even with allow_redirects=False, to fill
         # Response.next, past every bound here.
         response = session.get_adapter(url).send(request, stream=True, timeout=timeout)
     except (requests.ConnectionError, requests.Timeout) as e:
         raise _Retryable(type(e).__name__) from None
+    except ValueError as e:
+        # A URL requests or urllib3 can't use: requests' InvalidURL (also a
+        # RequestException) or urllib3's LocationParseError (not one), raised while
+        # preparing or connecting. Their messages quote the URL: the class only.
+        raise FetchError(f"{sender}: {type(e).__name__}") from None
     except requests.RequestException as e:
         raise FetchError(f"{host}: {type(e).__name__}") from None
     with response:

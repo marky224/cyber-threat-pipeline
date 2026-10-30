@@ -6,17 +6,20 @@ real HTTP adapter is made to fail if anything reaches it.
 
 from __future__ import annotations
 
+import socket
 from collections.abc import Sequence
 
 import pytest
 import requests
+import requests.adapters
 
 from cyber_threat_pipeline.enrichment import fetch
 from cyber_threat_pipeline.enrichment.fetch import FetchError, get_bytes
-from tests.fake_http import Reply, Script, block_real_http, session_with
+from tests.fake_http import FakeAdapter, Reply, Script, block_real_http, session_with
 
 URL = "https://feed.example/data.json"
 FAR = 10_000.0  # a deadline nobody reaches
+REAL_SEND = requests.adapters.HTTPAdapter.send  # captured before any test blocks it
 
 
 @pytest.fixture(autouse=True)
@@ -201,6 +204,48 @@ def test_a_redirect_without_a_location_fails_at_once(sleeps: list[float]) -> Non
     with pytest.raises(FetchError, match="HTTP 302"):
         get_bytes(session, URL, max_bytes=10, deadline=FAR)
     assert len(adapter.sent) == 1
+
+
+@pytest.mark.parametrize(
+    ("location", "error"),
+    [
+        ("https://[::1/", "ValueError"),  # urljoin can't parse it
+        ("https://a:99999/x", "InvalidURL"),  # requests can't prepare it
+        ("https://*/x", "InvalidURL"),
+        ("https://.evil/x", "InvalidURL"),
+    ],
+)
+def test_an_unusable_redirect_location_is_a_fetch_error_naming_no_location(
+    sleeps: list[float], caplog: pytest.LogCaptureFixture, location: str, error: str
+) -> None:
+    redirect = Reply(302, headers={"Location": location})
+    session, adapter = session_with({"feed.example": [redirect, Reply(body=b"ok")]})
+    with pytest.raises(FetchError) as e:
+        get_bytes(session, URL, max_bytes=10, deadline=FAR)
+    # The host that sent the redirect and the error class; never the Location.
+    assert str(e.value) == f"feed.example: {error}"
+    assert len(adapter.sent) == 1  # fails at once: no retry, no second hop
+    assert sleeps == []
+    assert location not in caplog.text
+
+
+def test_a_location_urllib3_rejects_at_connect_is_a_fetch_error(
+    monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
+) -> None:
+    # requests' real HTTPAdapter for the second hop, with DNS stubbed: nothing leaves.
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", REAL_SEND)
+
+    def no_dns(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a test tried to resolve a host")
+
+    monkeypatch.setattr(socket, "getaddrinfo", no_dns)
+    session = fetch.new_session()
+    redirect = Reply(302, headers={"Location": "https://evil..com/x"})
+    session.mount("https://feed.example/", FakeAdapter({"feed.example": [redirect]}))
+    with pytest.raises(FetchError) as e:
+        get_bytes(session, URL, max_bytes=10, deadline=FAR)
+    assert str(e.value) == "feed.example: LocationParseError"
+    assert sleeps == []
 
 
 def test_new_session_speaks_only_https_and_ignores_the_environment() -> None:

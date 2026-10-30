@@ -286,6 +286,34 @@ def test_a_lost_connection_while_writing_still_raises(
         enrich.run(pg_url, session=session)
 
 
+def test_an_unusable_kev_redirect_still_tries_the_mirror_and_epss(
+    pg_url: str, corpus: psycopg.Connection, caplog: pytest.LogCaptureFixture
+) -> None:
+    bad = Reply(302, headers={"Location": "https://[::1/"})
+    adapter = _run(
+        pg_url,
+        {CISA: [bad], MIRROR: [Reply(body=KEV_RECORDED)], FIRST: [Reply(body=EPSS_RECORDED)]},
+    )
+    assert adapter.hosts() == [CISA, MIRROR, FIRST]
+    assert len(_table(corpus, "kev_vulnerabilities")) == 12
+    assert len(_table(corpus, "epss_scores")) == 4
+    assert "KEV from www.cisa.gov failed: www.cisa.gov: ValueError" in caplog.text
+    assert "[::1" not in caplog.text
+
+
+def test_an_unusable_epss_redirect_keeps_the_validated_kev_write(
+    pg_url: str, corpus: psycopg.Connection, caplog: pytest.LogCaptureFixture
+) -> None:
+    stored = _store_epss(corpus, EPSS_IDS[:2])
+    bad = Reply(302, headers={"Location": "https://.evil/x"})
+    adapter = _run(pg_url, {CISA: [Reply(body=KEV_RECORDED)], FIRST: [bad]})
+    assert adapter.hosts() == [CISA, FIRST]
+    assert len(_table(corpus, "kev_vulnerabilities")) == 12
+    assert _table(corpus, "epss_scores") == stored
+    assert "EPSS failed: api.first.org: InvalidURL" in caplog.text
+    assert ".evil" not in caplog.text
+
+
 def test_a_database_error_is_not_swallowed(pg_url: str) -> None:
     session, adapter = session_with({})
     with pytest.raises(psycopg.OperationalError):
