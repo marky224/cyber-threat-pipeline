@@ -47,6 +47,7 @@ flowchart TB
     OTX --> Ingest
     Feeds --> Enrich
     Cron -.dispatches.-> Ingest
+    Cron -.dispatches.-> Enrich
     Cron -.dispatches.-> DBT
     Cron -.dispatches.-> Analysis
     Cron -.dispatches.-> Build
@@ -84,7 +85,7 @@ Neither feed needs a key. Both are treated as untrusted input; see `enrichment/`
 **GitHub Actions** — two workflows:
 
 - `ci.yml` runs on every push/PR: lint (ruff), type-check (mypy, strict), unit tests (pytest), gitleaks, dbt build+test, Evidence build, terraform validate.
-- `pipeline.yml` runs weekly (Mon 13:23 UTC) and on manual dispatch: ingest → transform → analyse → publish. This is the *only* mechanism that writes to production Neon or deploys to AWS.
+- `pipeline.yml` runs weekly (Mon 13:23 UTC) and on manual dispatch: ingest → enrich → transform → analyse → publish. This is the *only* mechanism that writes to production Neon or deploys to AWS.
 
 No other scheduler exists. The Makefile is the single source of truth for stage commands; both workflows invoke `make <target>`.
 
@@ -159,23 +160,28 @@ The Grafana datasource is the `grafana_ro` Neon role. The dashboard and alerts a
      → INSERT … ON CONFLICT into raw.{pulses, indicators, references}
      → UPDATE pipeline.state SET modified_since = NOW()
      → INSERT INTO pipeline.runs (stage='ingest', status='ok', rows=…)
-3. make transform
+3. make enrich
+     → GET the CISA KEV catalog (cisa.gov, else the GitHub mirror)
+     → GET FIRST EPSS scores for the corpus's CVE ids (≤ 100 per call)
+     → INSERT … ON CONFLICT into raw.{kev_vulnerabilities, epss_scores}
+       (a failed feed keeps its stored snapshot; the step never fails the run)
+4. make transform
      → dbt build (in isolated env)
    make record-dbt
      → UPDATE pipeline.runs SET dbt_tests_{passed,failed,skipped,warned}=… (latest row)
-4. make analysis
+5. make analysis
      → SELECT … FROM marts
      → primary_provider.complete(prompt)  ── Claude in prod
      → secondary_provider.complete(prompt)
      → write reporting/pages/analyst-brief.md (side-by-side tabs)
      → INSERT INTO pipeline.runs (stage='analysis', status='ok')
-5. make report
+6. make report
      → npm run build (Evidence reads from marts at build time)
      → assume IAM role via OIDC
      → aws s3 sync reporting/build/ s3://cyber-threat-pipeline-site/
      → aws cloudfront create-invalidation
      → INSERT INTO pipeline.runs (stage='report', status='ok')
-6. Grafana Cloud (out of band)
+7. Grafana Cloud (out of band)
      → queries marts + pipeline.runs through grafana_ro
      → evaluates alert rules every 900s
 ```
@@ -189,6 +195,7 @@ Any stage failure writes a `failed` row to `pipeline.runs` and trips the `ctp-ru
 | GitHub Actions → AWS | OIDC-assumed IAM role; trust policy pins `sub` to `repo:<owner>/<repo>:ref:refs/heads/main` and `…:environment:production`. No static keys. |
 | Grafana Cloud → Neon | `grafana_ro` role; read-only, scoped to `marts` + `pipeline.runs`. |
 | Evidence build → Neon | Build-time queries via the application role; static output bakes results into HTML, no live DB connection from the published site. |
+| Enrichment → CISA / FIRST | HTTPS GET only, no credentials sent; the `pipeline.yml` step blanks the AWS credentials in its environment. Responses are size-capped and validated whole before anything is written. |
 | LLM providers → Neon | Providers never see the database — the analyst step fetches data first, then sends a synthesized prompt. |
 | `_private/` content | Never crosses the public boundary: `.gitignore` excludes `_private/`, `CLAUDE.md`, `.env`. CI runs `gitleaks` on every push. |
 
