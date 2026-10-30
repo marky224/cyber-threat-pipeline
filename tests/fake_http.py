@@ -1,8 +1,9 @@
 """A scripted stand-in for the network, for the enrichment tests.
 
 ``FakeAdapter`` is mounted on ``https://`` of a real ``fetch.new_session()``,
-so requests' own redirect, streaming and error-wrapping code runs while
-nothing leaves the process. ``block_real_http`` makes any real send fail.
+so fetch's real request path (request preparation, its own redirect handling,
+requests' streaming and error wrapping) runs while nothing leaves the process.
+``block_real_http`` makes any real send fail.
 """
 
 from __future__ import annotations

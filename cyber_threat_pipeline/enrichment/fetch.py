@@ -2,14 +2,15 @@
 
 The feeds are outside services, so every download is bounded:
 
-- HTTPS only, at every hop. Redirects (at most five) are followed here, not by
-  requests: its ``Session.send`` reads every 3xx body whole (even with
-  ``allow_redirects=False``), past the size cap and the deadline, so each
-  request goes straight to the session's HTTPS adapter. A redirect's body is never read; its ``Location`` (a relative one
-  resolved against the current URL) must be HTTPS; the deadline is checked
-  again before each hop; and ``params`` go on the first request only.
-  ``new_session`` also mounts no ``http://`` adapter, as a backstop, and ignores
-  the environment (no proxy variables, no ``~/.netrc`` credentials).
+- HTTPS only, at every hop, with TLS verified. Redirects (at most five) are
+  followed here, not by requests: its ``Session.send`` reads every 3xx body
+  whole (even with ``allow_redirects=False``), past the size cap and the
+  deadline, so each request goes straight to the session's HTTPS adapter. A
+  redirect's body is never read; its ``Location`` (a relative one resolved
+  against the current URL) must be HTTPS; the deadline is checked again before
+  each hop; and ``params`` go on the first request only. ``new_session`` also
+  mounts no ``http://`` adapter, as a backstop, and ignores the environment (no
+  proxy variables, no ``~/.netrc`` credentials).
 - A project User-Agent; 10 s to connect, 30 s per read.
 - The body is read in 64 KiB chunks and abandoned once it passes ``max_bytes``
   (counted after gzip decoding, so a compressed bomb is cut off too).
