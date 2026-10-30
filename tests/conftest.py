@@ -25,6 +25,7 @@ SQL_FILES = (
     "21_runs_dbt_tests_warned.sql",
     "30_grafana_role.sql",
     "31_brief_evals.sql",
+    "32_kev_epss.sql",
 )
 
 
@@ -39,7 +40,10 @@ def _truncate(conn: psycopg.Connection) -> None:
     with conn.cursor() as cur:
         # CASCADE on pipeline.runs also truncates pipeline.state
         # (state.updated_by_run_id references runs.id), so we re-seed below.
-        cur.execute("TRUNCATE raw.indicators, raw.pulses, pipeline.runs RESTART IDENTITY CASCADE;")
+        cur.execute(
+            "TRUNCATE raw.indicators, raw.pulses, raw.kev_vulnerabilities, raw.epss_scores,"
+            " pipeline.runs RESTART IDENTITY CASCADE;"
+        )
         cur.execute(
             "INSERT INTO pipeline.state (singleton, modified_since) "
             "VALUES (true, NULL) "

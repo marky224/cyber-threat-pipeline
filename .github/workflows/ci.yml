@@ -126,7 +126,8 @@ jobs:
             -f sql/20_pipeline.sql \
             -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql \
-            -f sql/31_brief_evals.sql
+            -f sql/31_brief_evals.sql \
+            -f sql/32_kev_epss.sql
 
       - name: Sync app env (frozen) + seed fixture corpus
         run: |
@@ -205,7 +206,8 @@ jobs:
             -f sql/20_pipeline.sql \
             -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql \
-            -f sql/31_brief_evals.sql
+            -f sql/31_brief_evals.sql \
+            -f sql/32_kev_epss.sql
 
       - name: Sync app env (frozen) + seed fixture corpus
         run: |
