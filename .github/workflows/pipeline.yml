@@ -122,7 +122,9 @@ jobs:
       # The OIDC step above exported AWS credentials to every later step's
       # environment. This step parses outside data and needs no AWS, so it
       # blanks them (a step's env overrides the exported values). Ingest is
-      # left as it was.
+      # left as it was. The step can still request a GitHub OIDC token (the
+      # workflow grants id-token: write), but the deploy role ARN is not in
+      # its env.
       # -------------------------------------------------------------------
       - name: Enrich CVEs (CISA KEV + FIRST EPSS)
         continue-on-error: true
