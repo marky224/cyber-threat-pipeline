@@ -42,6 +42,7 @@ def test_returns_the_body_and_sends_the_bounds(sleeps: list[float]) -> None:
     body = get_bytes(session, URL, max_bytes=100, deadline=FAR, params={"cve": "CVE-2026-0001"})
     assert body == b"abcd"
     assert adapter.timeouts == [(10.0, 30.0)]
+    assert adapter.verify == [True]  # TLS certificates are checked
     assert adapter.sent[0].headers["User-Agent"] == fetch.USER_AGENT
     assert adapter.query(0) == {"cve": ["CVE-2026-0001"]}
     assert sleeps == []
@@ -143,9 +144,61 @@ def test_refuses_a_non_https_url(sleeps: list[float]) -> None:
 
 
 def test_a_redirect_to_plain_http_is_never_followed(sleeps: list[float]) -> None:
-    redirect = Reply(302, headers={"Location": "http://feed.example/data.json"})
+    redirect = Reply(302, headers={"Location": "http://feed.example/data.json"}, body=[b"x"] * 3)
     session, adapter = session_with({"feed.example": [redirect]})
     with pytest.raises(FetchError, match="redirected off HTTPS"):
+        get_bytes(session, URL, max_bytes=10, deadline=FAR)
+    assert len(adapter.sent) == 1
+    assert adapter.raws[0].chunks_read == 0
+
+
+def test_a_redirect_body_is_never_read(sleeps: list[float]) -> None:
+    # requests would read every 3xx body whole: no size cap, no deadline.
+    five_mb = [b"x" * 1024] * 5 * 1024
+    redirect = Reply(302, headers={"Location": "https://feed.example/b"}, body=five_mb)
+    session, adapter = session_with({"feed.example": [redirect, Reply(body=b"ok")]})
+    assert get_bytes(session, URL, max_bytes=1024, deadline=FAR) == b"ok"
+    assert adapter.raws[0].chunks_read == 0
+    assert [r.url for r in adapter.sent] == [URL, "https://feed.example/b"]
+
+
+def test_the_deadline_is_checked_at_every_hop(monkeypatch: pytest.MonkeyPatch) -> None:
+    ticks = iter(range(100))
+    monkeypatch.setattr(fetch, "monotonic", lambda: float(next(ticks)))
+    monkeypatch.setattr(fetch, "sleep", lambda seconds: None)
+    hops: list[Script] = [
+        Reply(302, headers={"Location": f"https://feed.example/{n}"}) for n in "bcd"
+    ]
+    session, adapter = session_with({"feed.example": [*hops, Reply(body=b"ok")]})
+    with pytest.raises(FetchError, match="time budget spent"):
+        get_bytes(session, URL, max_bytes=10, deadline=1.5)
+    assert len(adapter.sent) == 2
+
+
+def test_a_relative_location_is_followed_without_the_first_requests_params(
+    sleeps: list[float],
+) -> None:
+    redirect = Reply(301, headers={"Location": "/b?page=2"})
+    session, adapter = session_with({"feed.example": [redirect, Reply(body=b"ok")]})
+    body = get_bytes(session, URL, max_bytes=10, deadline=FAR, params={"cve": "CVE-2026-0001"})
+    assert body == b"ok"
+    assert adapter.query(0) == {"cve": ["CVE-2026-0001"]}
+    assert adapter.sent[1].url == "https://feed.example/b?page=2"
+
+
+def test_more_than_five_redirects_fail(sleeps: list[float]) -> None:
+    hops: list[Script] = [
+        Reply(307, headers={"Location": f"https://feed.example/{n}"}) for n in range(6)
+    ]
+    session, adapter = session_with({"feed.example": hops})
+    with pytest.raises(FetchError, match="more than 5 redirects"):
+        get_bytes(session, URL, max_bytes=10, deadline=FAR)
+    assert len(adapter.sent) == 6
+
+
+def test_a_redirect_without_a_location_fails_at_once(sleeps: list[float]) -> None:
+    session, adapter = session_with({"feed.example": [Reply(302)]})
+    with pytest.raises(FetchError, match="HTTP 302"):
         get_bytes(session, URL, max_bytes=10, deadline=FAR)
     assert len(adapter.sent) == 1
 
@@ -154,5 +207,4 @@ def test_new_session_speaks_only_https_and_ignores_the_environment() -> None:
     session = fetch.new_session()
     assert list(session.adapters) == ["https://"]
     assert session.trust_env is False
-    assert session.max_redirects == 5
     assert session.headers["User-Agent"] == fetch.USER_AGENT

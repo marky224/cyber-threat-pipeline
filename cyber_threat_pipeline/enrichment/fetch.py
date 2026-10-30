@@ -2,10 +2,14 @@
 
 The feeds are outside services, so every download is bounded:
 
-- HTTPS only. ``new_session`` mounts no ``http://`` adapter, so a redirect to
-  plain HTTP fails before a request goes out. It also ignores the environment
-  (no proxy variables, no ``~/.netrc`` credentials) and follows at most five
-  redirects.
+- HTTPS only, at every hop. Redirects (at most five) are followed here, not by
+  requests: its ``Session.send`` reads every 3xx body whole (even with
+  ``allow_redirects=False``), past the size cap and the deadline, so each
+  request goes straight to the session's HTTPS adapter. A redirect's body is never read; its ``Location`` (a relative one
+  resolved against the current URL) must be HTTPS; the deadline is checked
+  again before each hop; and ``params`` go on the first request only.
+  ``new_session`` also mounts no ``http://`` adapter, as a backstop, and ignores
+  the environment (no proxy variables, no ``~/.netrc`` credentials).
 - A project User-Agent; 10 s to connect, 30 s per read.
 - The body is read in 64 KiB chunks and abandoned once it passes ``max_bytes``
   (counted after gzip decoding, so a compressed bomb is cut off too).
@@ -14,7 +18,7 @@ The feeds are outside services, so every download is bounded:
   Retry-After replaces that wait, capped at 60 s. Any other non-200 fails at
   once.
 - ``deadline`` (a ``time.monotonic()`` value that every call for one feed
-  shares) bounds the lot: no attempt starts and no wait runs past it, each
+  shares) bounds the lot: no attempt or hop starts and no wait runs past it, each
   timeout is cut to the time left, and the body is abandoned at the first
   chunk that ends past it. A server that drips bytes can still hold one chunk
   open longer; the pipeline step's own timeout is the hard stop.
@@ -28,7 +32,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from time import monotonic, sleep
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
@@ -40,6 +44,8 @@ READ_TIMEOUT = 30.0
 ATTEMPTS = 3
 BACKOFF = (2.0, 4.0)  # waits before attempts 2 and 3
 RETRY_AFTER_CAP = 60.0
+MAX_REDIRECTS = 5
+_REDIRECTS = frozenset({301, 302, 303, 307, 308})
 _CHUNK = 64 * 1024
 
 
@@ -60,7 +66,6 @@ def new_session() -> requests.Session:
     session = requests.Session()
     del session.adapters["http://"]
     session.trust_env = False
-    session.max_redirects = 5
     session.headers["User-Agent"] = USER_AGENT
     return session
 
@@ -79,7 +84,7 @@ def get_bytes(
         raise FetchError(f"{host}: refusing a non-HTTPS URL")
     for attempt in range(1, ATTEMPTS + 1):
         try:
-            return _get_once(session, url, params, host, max_bytes, deadline)
+            return _follow(session, url, params, max_bytes, deadline)
         except _Retryable as e:
             if attempt == ATTEMPTS:
                 raise FetchError(f"{host}: {e}, gave up after {ATTEMPTS} attempts") from None
@@ -93,6 +98,25 @@ def get_bytes(
     raise AssertionError("unreachable")
 
 
+def _follow(
+    session: requests.Session,
+    url: str,
+    params: Mapping[str, str] | None,
+    max_bytes: int,
+    deadline: float,
+) -> bytes:
+    """One attempt: the request and up to ``MAX_REDIRECTS`` hops, each one bounded."""
+    for _ in range(MAX_REDIRECTS + 1):
+        host = urlsplit(url).hostname or "?"
+        answer = _get_once(session, url, params, host, max_bytes, deadline)
+        if isinstance(answer, bytes):
+            return answer
+        url, params = urljoin(url, answer), None
+        if not url.startswith("https://"):
+            raise FetchError(f"{host}: redirected off HTTPS")
+    raise FetchError(f"{host}: more than {MAX_REDIRECTS} redirects")
+
+
 def _get_once(
     session: requests.Session,
     url: str,
@@ -100,21 +124,29 @@ def _get_once(
     host: str,
     max_bytes: int,
     deadline: float,
-) -> bytes:
+) -> bytes | str:
+    """One request: the body, or a redirect's ``Location`` (its body left unread)."""
     left = deadline - monotonic()
     if left <= 0:
         raise FetchError(f"{host}: time budget spent")
     timeout = (min(CONNECT_TIMEOUT, left), min(READ_TIMEOUT, left))
+    request = session.prepare_request(requests.Request("GET", url, params=params))
     try:
-        response = session.get(url, params=params, timeout=timeout, stream=True)
-    except requests.exceptions.InvalidSchema:
-        raise FetchError(f"{host}: redirected off HTTPS") from None
+        # Straight to the adapter (TLS verified, no proxies): Session.send reads a
+        # redirect's whole body even with allow_redirects=False, to fill
+        # Response.next, past every bound here.
+        response = session.get_adapter(url).send(request, stream=True, timeout=timeout)
     except (requests.ConnectionError, requests.Timeout) as e:
         raise _Retryable(type(e).__name__) from None
     except requests.RequestException as e:
         raise FetchError(f"{host}: {type(e).__name__}") from None
     with response:
         status = response.status_code
+        if status in _REDIRECTS:
+            location = response.headers.get("Location")
+            if not location:
+                raise FetchError(f"{host}: HTTP {status} without a Location")
+            return location  # closing the response drops the body unread
         if status == 429 or 500 <= status < 600:
             wait = _retry_after(response) if status == 429 else None
             raise _Retryable(f"HTTP {status}", wait)

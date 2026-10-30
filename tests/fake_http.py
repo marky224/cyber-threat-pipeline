@@ -66,6 +66,7 @@ class FakeAdapter(BaseAdapter):
         self.routes = {host: list(queue) for host, queue in routes.items()}
         self.sent: list[requests.PreparedRequest] = []
         self.timeouts: list[Any] = []
+        self.verify: list[Any] = []
         self.raws: list[_Raw] = []
         self.on_send: list[Any] = []  # callables run before each answer
 
@@ -80,6 +81,7 @@ class FakeAdapter(BaseAdapter):
     ) -> requests.Response:
         self.sent.append(request)
         self.timeouts.append(timeout)
+        self.verify.append(verify)
         for hook in self.on_send:
             hook()
         host = urlsplit(str(request.url)).hostname or ""
