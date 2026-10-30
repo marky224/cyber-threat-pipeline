@@ -26,7 +26,22 @@ Checks (``Finding.check`` codes are stable; Grafana and tests key on them):
   section, bullet or paragraph, is a substring of an input pulse name or tag
   (case-insensitive). Trailing ``, . ; : ! ?`` and whitespace (any Unicode
   space, a no-break space too) inside the quotes are ignored: "APT28,"
-  quotes the tag APT28. A quote of nothing but those is no fact.
+  quotes the tag APT28. A quote of nothing but those is no fact. A straight
+  quote mark opens a quote only before a non-space and closes it only where
+  no letter or digit follows (markdown emphasis may: _"APT28"_), so the inch
+  mark in 'a 27" screen' opens none, and an unclosed quote doesn't pair with
+  a later quote whose text starts with a letter or digit: in 'He said "hi.
+  Officials link "APT28"' the unclosed "hi. pairs with nothing and APT28 is
+  checked. A later quote whose text starts with anything but a letter or
+  digit (_, *, (, a space, ', #, ...: "_Fake Zebra_", "*Fake Zebra*",
+  "(APT28)", " Fake Zebra") closes the unclosed quote instead, so the text
+  between the two marks is checked as one name and a trend word there is not
+  flagged. A straight quote whose closing mark is followed by a letter or
+  digit ("Fake Zebra"s) is not checked, nor is one that opens with a space
+  (any Unicode space: " Fake Zebra"): on its own it is plain text, and after
+  an unclosed quote the mark before the space closes that quote instead. A
+  curly quote ends at its first ” and can't hold another “. A quote mark left
+  unpaired is plain text, no fact.
 - ``cve_unknown``: every CVE id appears in an input pulse name or tag.
 - ``number_unsupported``: every number is in the allowed set for its scope and
   unit (rules below).
@@ -37,6 +52,11 @@ Checks (``Finding.check`` codes are stable; Grafana and tests key on them):
   and surgery are not trend words. ``brief_input`` has no previous-period
   figures, so no such comparison can be supported. Quoted text is ignored, so
   a pulse name like "the rise of Midnight Mimosa" can be quoted.
+
+Sentences: a bullet or paragraph splits after ``. ! ?`` and whitespace
+before a capital, digit, ``*``, a quote or ``(``, never inside a quote, so
+every check reads "U.S. Fake Operation Zebra" whole. Outside quotes an
+abbreviation still ends a sentence: "the U.S. Treasury" splits after "U.S.".
 
 Number rules (``number_unsupported``):
 
@@ -176,13 +196,27 @@ _HEADING = re.compile(r"^\s*#{1,6}\s+(.*)$")
 _SECTION_HEADING = re.compile(r"^\s*##\s+(.*)$")
 _BOLD_LINE = re.compile(r"^\s*\*\*([^*]+)\*\*:?\s*$")
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
-_QUOTED = re.compile(r"\"([^\"]+)\"|“([^”]+)”")
+# A straight quote opens only before a non-space, so the inch mark in 'a 27"
+# screen' opens none, and closes only where no letter or digit follows (the _
+# of markdown emphasis may: _"APT28"_). So a later quote whose text starts
+# with a letter or digit doesn't close an unclosed one: in 'He said "hi.
+# Officials link "APT28"' the mark before APT28 opens a quote instead of
+# closing "hi. One whose text starts with anything else (_, *, (, a space,
+# ', #, ...: "_Fake Zebra_", " Fake Zebra") closes "hi. instead, and the text
+# between the two marks reads as one name.
+# A curly quote can't hold another opening one, so a “ with no ” after it is
+# read up to the next “ (to the end: quadratic).
+_QUOTED = re.compile(r"\"(?=\S)([^\"]+)\"(?![^\W_])|“([^“”]+)”")
 # Trailing punctuation and whitespace (any Unicode space) inside a quote are
 # not part of the name: a US-style brief writes "APT28," "Lazarus." The
 # lookbehind starts a match only where such a run starts, so a long space run
 # is read once (unanchored, the search retries at every space: quadratic).
 _QUOTE_TAIL = re.compile(r"(?<![\s,.;:!?])[\s,.;:!?]+$")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9*\"“(])")
+# A quote or a sentence end. A split falls only on a sentence end, so a quote
+# is never cut: "U.S. Fake Operation Zebra" is one quote. Quotes pair as in
+# ``_QUOTED``; an unpaired quote mark is plain text.
+_SENTENCE_OR_QUOTE = re.compile(rf"{_QUOTED.pattern}|{_SENTENCE_END.pattern}")
 _MASK = re.compile(
     r"\bCVE-\d{4}-\d{4,}\b"
     r"|\b[0-9a-f]{24}\b"
@@ -542,7 +576,15 @@ def _unique_tags(pulses: list[_Pulse]) -> dict[str, _Pulse]:
 
 
 def _sentences(text: str) -> list[str]:
-    return [s for s in _SENTENCE_END.split(text) if s.strip()]
+    """``text`` split at sentence ends, never inside a quoted string."""
+    out: list[str] = []
+    start = 0
+    for m in _SENTENCE_OR_QUOTE.finditer(text):
+        if m.lastindex is None:  # a sentence end; a quote sets group 1 or 2
+            out.append(text[start : m.start()])
+            start = m.end()
+    out.append(text[start:])
+    return [s for s in out if s.strip()]
 
 
 def _count_words(brief_md: str) -> int:

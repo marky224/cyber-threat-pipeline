@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 
 from cyber_threat_pipeline.analysis.eval import (
+    FACT_CHECKS,
     REQUIRED_SECTIONS,
     EvalResult,
     Finding,
@@ -1299,3 +1300,309 @@ def test_a_quote_of_nothing_but_punctuation_is_no_fact() -> None:
     result = evaluate('Some pulses carry only "..." as a description.', _ACTORS)
     assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
     assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
+# --------------------------------------------------------------------------
+# How quote marks pair
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("prose", "facts"),
+    [
+        ('One stray " mark here. Officials link "APT28" to it.', (1, 1)),
+        ('A 27" screen shows it. Officials link "APT28" to it.', (1, 2)),
+        ('One stray " mark sits next to "APT28" here.', (1, 1)),
+        ('A 27" screen shows "APT28" here.', (1, 2)),
+    ],
+    ids=["stray mark", "inch mark", "stray mark, one sentence", "inch mark, one sentence"],
+)
+def test_a_straight_quote_mark_before_a_space_opens_no_quote(
+    prose: str, facts: tuple[int, int]
+) -> None:
+    # The stray mark would pair with the quote before APT28 and check the gap
+    # between them instead. The "27" count is the second fact of the inch mark.
+    result = evaluate(prose, _ACTORS)
+    assert [f.detail for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == facts
+
+
+@pytest.mark.parametrize(
+    ("prose", "found", "facts"),
+    [
+        (
+            'Officials link "Fake Zebra to it. Vendors saw a surge. Others cite "APT28" too.',
+            [("comparison_without_baseline", "Vendors saw a surge.")],
+            (1, 2),
+        ),
+        ('Officials link "U.S. Fake Zebra to it. Others cite "APT28" too.', [], (1, 1)),
+        (
+            'A 27"-inch screen shows it. Officials link "APT28" to it.',
+            [("number_unsupported", 'A 27"-inch screen shows it.')],
+            (1, 2),
+        ),
+        ('He said "hi. Officials link "APT28" to it.', [], (1, 1)),
+    ],
+    ids=[
+        "unclosed, then a trend word",
+        "unclosed U.S.",
+        "inch mark before a hyphen",
+        "unclosed hi",
+    ],
+)
+def test_a_straight_quote_closes_only_where_no_letter_or_digit_follows(
+    prose: str, found: list[tuple[str, str]], facts: tuple[int, int]
+) -> None:
+    # The mark before APT28 is followed by a letter, so it can't close the
+    # unclosed quote: that quote would swallow the sentences up to it, check
+    # the gap text as a name, hide the trend word and leave APT28 unchecked.
+    # The "27" count is the second fact of the inch mark.
+    result = evaluate(prose, _ACTORS)
+    assert [(f.check, f.text) for f in result.findings if f.check in FACT_CHECKS] == found
+    assert (result.facts_verified, result.facts_total) == facts
+
+
+@pytest.mark.parametrize(
+    ("prose", "names", "trends", "facts"),
+    [
+        (
+            'Officials link _"Fake Zebra"_ and _"APT28"_ to it.',
+            [('Officials link _"Fake Zebra"_ and _"APT28"_ to it.', "fake zebra")],
+            [],
+            (1, 2),
+        ),
+        (
+            'Officials link __"Fake Zebra"__ to it.',
+            [('Officials link __"Fake Zebra"__ to it.', "fake zebra")],
+            [],
+            (0, 1),
+        ),
+        (
+            'Officials link _"U.S. Fake Zebra"_ to it.',
+            [('Officials link _"U.S. Fake Zebra"_ to it.', "u.s. fake zebra")],
+            [],
+            (0, 1),
+        ),
+        (
+            'Officials link _"Fake Zebra"_ to it. Vendors saw a surge. Others cite "(APT28)" too.',
+            [
+                ('Officials link _"Fake Zebra"_ to it.', "fake zebra"),
+                ('Others cite "(APT28)" too.', "(apt28)"),
+            ],
+            ["Vendors saw a surge."],
+            (0, 3),
+        ),
+    ],
+    ids=["emphasis", "strong emphasis", "emphasis around U.S.", "emphasis, then a trend word"],
+)
+def test_a_straight_quote_in_underscore_emphasis_is_checked(
+    prose: str, names: list[tuple[str, str]], trends: list[str], facts: tuple[int, int]
+) -> None:
+    # Markdown's _ is a word character but not a letter or digit, so a
+    # closing mark before it still closes the quote.
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (t, f"{q!r} is not in any pulse name or tag") for t, q in names
+    ]
+    assert [f.text for f in result.findings if f.check == "comparison_without_baseline"] == trends
+    assert (result.facts_verified, result.facts_total) == facts
+
+
+@pytest.mark.parametrize("space", [" ", "\u00a0"], ids=["space", "no-break space"])
+def test_a_straight_quote_opening_with_a_space_is_not_checked(space: str) -> None:
+    # Known limit, pinned: a straight quote opens only before a non-space.
+    result = evaluate(f'Officials link "{space}Fake Zebra" to it.', _ACTORS)
+    assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "prose",
+    ['Officials link "Fake Zebra"to it.', 'Officials link "Fake Zebra"s operators.'],
+    ids=["letter after the close", "s after the close"],
+)
+def test_a_straight_quote_closed_before_a_letter_is_not_checked(prose: str) -> None:
+    # Known limit, pinned: a closing mark followed by a letter or digit closes
+    # nothing, and the mark itself then opens a quote that never closes.
+    result = evaluate(prose, _ACTORS)
+    assert [f for f in result.findings if f.check == "pulse_name_unknown"] == []
+    assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["_Fake Zebra_", "*Fake Zebra*", " Fake Zebra"],
+    ids=["underscore", "asterisk", "space"],
+)
+def test_an_unclosed_quote_pairs_with_a_later_quote_not_starting_with_a_letter_or_digit(
+    name: str,
+) -> None:
+    # Known limit, pinned: the mark before anything but a letter or digit may
+    # close, so it closes the unclosed "hi. and the text between the two marks
+    # reads as one name: its sentences merge, and the trend word in them sits
+    # inside the quote.
+    prose = f'He said "hi. Vendors saw a surge. Officials link "{name}" to it.'
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (prose, "'hi. vendors saw a surge. officials link' is not in any pulse name or tag")
+    ]
+    assert [f for f in result.findings if f.check == "comparison_without_baseline"] == []
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
+def test_unclosed_straight_quotes_stay_fast() -> None:
+    # No straight quote mark here can close: each is followed by a letter.
+    marks = '"a' * 20_000
+    md = _brief(f"Routerbot ships {marks} (id={ID_A})")
+    assert _timed_evaluate(md, SYNTH) < 5.0
+
+
+def test_a_curly_quote_opening_inside_a_curly_quote_starts_a_new_one() -> None:
+    result = evaluate("Lures name “Fake “Zebra” Kit” again.", _ACTORS)
+    names = [f.detail for f in result.findings if f.check == "pulse_name_unknown"]
+    assert names == ["'zebra' is not in any pulse name or tag"]
+
+
+def test_unpaired_curly_quotes_stay_fast() -> None:
+    # Each “ with no ” after it used to be read to the end of the text: about
+    # 10 s for 20,000 of them in one sentence.
+    md = _brief(f"Routerbot ships {'“a ' * 20_000}. (id={ID_A})")
+    assert _timed_evaluate(md, SYNTH) < 1.0
+    # Sentences split around whole quotes, so the quote search reads the whole
+    # bullet: 20,000 short sentences each opening a “ must stay linear too.
+    md = _brief(f"Routerbot ships {'“a. B' * 20_000} (id={ID_A})")
+    assert _timed_evaluate(md, SYNTH) < 1.0
+
+
+# --------------------------------------------------------------------------
+# A sentence never ends inside a quote
+# --------------------------------------------------------------------------
+
+# _ACTORS, with a pulse name and a tag that hold an abbreviation.
+_ABBREV: dict[str, Any] = json.loads(json.dumps(_ACTORS))
+_ABBREV["emerging_pulses_7d"][0]["name"] = "U.S. Treasury Phishing Kit"
+_ABBREV["emerging_pulses_7d"][1]["tags"] = ["Acme Inc. Loader"]
+
+
+def _name_findings(prose: str, brief_input: dict[str, Any] = _ACTORS) -> list[tuple[str, str]]:
+    found = evaluate(prose, brief_input).findings
+    return [(f.text, f.detail) for f in found if f.check == "pulse_name_unknown"]
+
+
+@pytest.mark.parametrize(
+    ("prose", "quote"),
+    [
+        (
+            'Officials link "U.S. Fake Operation Zebra" to the campaign.',
+            "u.s. fake operation zebra",
+        ),
+        (
+            "Officials link “U.S. Fake Operation Zebra” to the campaign.",
+            "u.s. fake operation zebra",
+        ),
+        ('"Acme Inc. Fake Botnet" is new.', "acme inc. fake botnet"),
+        ("“Acme Inc. Fake Botnet” is new.", "acme inc. fake botnet"),
+        ('Lures name "Fake Loaders e.g. Zebra" again.', "fake loaders e.g. zebra"),
+    ],
+    ids=["U.S.", "U.S. in curly quotes", "Inc.", "Inc. in curly quotes", "e.g."],
+)
+def test_a_quote_holding_an_abbreviation_is_one_name(prose: str, quote: str) -> None:
+    # "U.S." before a capital used to end the sentence inside the quote, so
+    # neither half held a whole quote and the invented name scored 0/0.
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [(prose, f"{quote!r} is not in any pulse name or tag")]
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
+def test_a_known_name_holding_an_abbreviation_passes() -> None:
+    prose = 'Lures reuse "U.S. Treasury Phishing Kit" and “Acme Inc. Loader” this week.'
+    result = evaluate(prose, _ABBREV)
+    assert _name_findings(prose, _ABBREV) == []
+    assert (result.facts_verified, result.facts_total) == (2, 2)
+
+
+def test_each_quote_in_a_list_is_read_whole() -> None:
+    # Cut after "U.S.", the list used to pair the gaps: only " and " was checked.
+    prose = 'Officials name "U.S. Fake Zebra", "Acme Inc. Fake Botnet" and "APT28" in turn.'
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (prose, "'u.s. fake zebra' is not in any pulse name or tag"),
+        (prose, "'acme inc. fake botnet' is not in any pulse name or tag"),
+    ]
+    assert (result.facts_verified, result.facts_total) == (1, 3)
+
+
+@pytest.mark.parametrize(
+    ("prose", "sentence", "quote"),
+    [
+        (
+            'Per the U.S. Treasury, "Acme Inc. Fake Botnet" is new.',
+            'Treasury, "Acme Inc. Fake Botnet" is new.',
+            "acme inc. fake botnet",
+        ),
+        (
+            'Per Acme Inc. Research, "U.S. Fake Zebra" is new.',
+            'Research, "U.S. Fake Zebra" is new.',
+            "u.s. fake zebra",
+        ),
+        ('Lures (e.g. "U.S. Fake Zebra") recur.', '"U.S. Fake Zebra") recur.', "u.s. fake zebra"),
+    ],
+    ids=["U.S.", "Inc.", "e.g."],
+)
+def test_abbreviations_outside_quotes_still_end_a_sentence(
+    prose: str, sentence: str, quote: str
+) -> None:
+    # Known limit: outside quotes the split is unchanged, so the finding's
+    # text starts after the abbreviation. The quote itself is read whole.
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [(sentence, f"{quote!r} is not in any pulse name or tag")]
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
+@pytest.mark.parametrize(
+    ("before", "sentence"),
+    [
+        ('One stray " mark here.', "Officials link “U.S. Fake Operation Zebra” to it."),
+        ('He said "hi.', 'Officials link "U.S. Fake Operation Zebra" to it.'),
+    ],
+    ids=["stray mark, curly quote", "unclosed quote, straight quote"],
+)
+def test_an_unpaired_quote_mark_neither_counts_nor_holds_back_later_sentences(
+    before: str, sentence: str
+) -> None:
+    prose = f"{before} {sentence}"
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == [
+        (sentence, "'u.s. fake operation zebra' is not in any pulse name or tag")
+    ]
+    assert (result.facts_verified, result.facts_total) == (0, 1)
+
+
+def test_an_unclosed_quote_is_no_fact() -> None:
+    # Pins today's rule: a quote mark with no partner is plain text.
+    prose = 'Officials link "U.S. Fake Operation Zebra to the campaign.'
+    result = evaluate(prose, _ACTORS)
+    assert _name_findings(prose) == []
+    assert (result.facts_verified, result.facts_total) == (0, 0)
+
+
+def test_a_trend_word_in_a_quote_holding_an_abbreviation_is_ignored() -> None:
+    md = _brief(f"Routerbot. (id={ID_A})", contrast='- Vendors call it "U.S. Surge Campaign" now.')
+    assert _findings(md, "comparison_without_baseline") == []
+
+
+def test_id_and_cve_findings_show_the_whole_sentence_around_a_quoted_abbreviation() -> None:
+    sentence = f'"U.S. Fake Zebra" exploits CVE-2099-0001 (id={"f" * 24}).'
+    result = evaluate(_brief(sentence), SYNTH)
+    checks = {"pulse_id_unknown", "pulse_name_unknown", "cve_unknown"}
+    assert sorted((f.check, f.text) for f in result.findings if f.check in checks) == [
+        ("cve_unknown", sentence),
+        ("pulse_id_unknown", sentence),
+        ("pulse_name_unknown", sentence),
+    ]
+
+
+def test_bold_names_before_a_quoted_abbreviation_still_count_as_named_items() -> None:
+    # "two botnets" is the two bold names before it, past the quoted "U.S.".
+    md = _brief(f'**Routerbot** and **Kimsuky** ride "U.S. Fake Kit" as two botnets. (id={ID_A})')
+    assert _findings(md, "number_unsupported") == []
