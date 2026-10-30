@@ -57,6 +57,20 @@ models:
       - name: generated_at
         tests: [not_null]
 
+  - name: mart_cve_enrichment
+    description: >
+      One row per CVE id the corpus holds as a CVE indicator, joined to the latest
+      CISA KEV and FIRST EPSS snapshots. in_kev = listed in the KEV catalog; epss is
+      NULL when FIRST has no score for the id.
+    columns:
+      - name: cve_id
+        tests: [not_null, unique]
+      - name: in_kev
+        tests: [not_null]
+      - name: seen_7d
+        description: "An active CVE indicator for this id was first seen in the last 7 days."
+        tests: [not_null]
+
 unit_tests:
   - name: mart_indicator_freshness_buckets_on_live_expiration
     description: >
@@ -75,3 +89,32 @@ unit_tests:
         - {type: 'IPv4',   freshness_bucket: 'expired',       indicator_count: 2}
         - {type: 'IPv4',   freshness_bucket: 'active_gt_30d', indicator_count: 1}
         - {type: 'domain', freshness_bucket: 'no_expiration', indicator_count: 1}
+
+  - name: mart_cve_enrichment_normalizes_and_joins
+    description: >
+      CVE indicator values are trimmed and upper-cased before grouping, values that
+      aren't CVE ids (or exceed 24 characters) and non-CVE types are left out, and
+      each id picks up its KEV entry and EPSS score when the latest snapshots have
+      one. seen_7d needs an active indicator first seen in the last 7 days.
+    model: mart_cve_enrichment
+    given:
+      - input: ref('int_indicator_freshness')
+        rows:
+          - {id: 1, indicator: ' cve-2026-0001 ',               type: 'CVE',    pulse_id: 'P2', is_active: false, first_seen_at: '2020-01-01 00:00:00+00'}
+          - {id: 2, indicator: 'CVE-2026-0001',                 type: 'CVE',    pulse_id: 'P1', is_active: true,  first_seen_at: '2999-01-01 00:00:00+00'}
+          - {id: 3, indicator: 'CVE-2026-0002',                 type: 'CVE',    pulse_id: 'P1', is_active: true,  first_seen_at: '2020-01-01 00:00:00+00'}
+          - {id: 4, indicator: 'not-a-cve',                     type: 'CVE',    pulse_id: 'P1', is_active: true,  first_seen_at: '2999-01-01 00:00:00+00'}
+          - {id: 5, indicator: 'CVE-2026-0003',                 type: 'domain', pulse_id: 'P1', is_active: true,  first_seen_at: '2999-01-01 00:00:00+00'}
+          - {id: 6, indicator: 'CVE-2026-9999999999999999',     type: 'CVE',    pulse_id: 'P1', is_active: true,  first_seen_at: '2999-01-01 00:00:00+00'}
+      - input: ref('stg_cisa__kev_vulnerabilities')
+        rows:
+          - {cve_id: 'CVE-2026-0001', is_known_ransomware: true}
+          - {cve_id: 'CVE-2026-9999', is_known_ransomware: false}
+      - input: ref('stg_first__epss_scores')
+        rows:
+          - {cve_id: 'CVE-2026-0001', epss: 0.97, percentile: 0.99}
+          - {cve_id: 'CVE-2026-0002', epss: 0.01, percentile: 0.20}
+    expect:
+      rows:
+        - {cve_id: 'CVE-2026-0001', indicator_count: 2, pulse_count: 2, active_indicator_count: 1, seen_7d: true,  in_kev: true,  kev_known_ransomware: true,  epss: 0.97}
+        - {cve_id: 'CVE-2026-0002', indicator_count: 1, pulse_count: 1, active_indicator_count: 1, seen_7d: false, in_kev: false, kev_known_ransomware: false, epss: 0.01}

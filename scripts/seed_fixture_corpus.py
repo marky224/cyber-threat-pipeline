@@ -14,6 +14,10 @@ countries, tags, industries, and a mix of expirations (past / soon / far / null)
 A single "dropped" indicator is created by backdating one indicator's
 synced_at after the initial load, so the canonical is_active / is_dropped
 logic (data-model.md §6) has a non-trivial true case to assert on.
+
+A small CISA KEV catalog and FIRST EPSS answer are written through the same
+validation and load code `make enrich` uses (no network), so
+mart_cve_enrichment joins at least one KEV-listed, EPSS-scored CVE.
 """
 
 from __future__ import annotations
@@ -28,6 +32,8 @@ from typing import Any
 import psycopg
 
 from cyber_threat_pipeline.core import runs
+from cyber_threat_pipeline.enrichment import epss, kev
+from cyber_threat_pipeline.enrichment import load as feeds
 from cyber_threat_pipeline.ingestion.load import load
 
 logger = logging.getLogger(__name__)
@@ -161,6 +167,8 @@ def _build_corpus() -> list[dict[str, Any]]:
                 _indicator(base + 31, "9.9.9.9", "IPv4", expiration=far_future),
                 _indicator(base + 32, "zero-day.example.io", "domain", expiration=soon),
                 _indicator(base + 33, "e" * 64, "FileHash-SHA256", expiration=far_future),
+                # Lower-case and padded on purpose: dbt normalizes it to CVE-2026-0002.
+                _indicator(base + 34, " cve-2026-0002 ", "CVE", expiration=None),
             ],
         ),
         _pulse(
@@ -237,6 +245,62 @@ def _transform(
     return pulse_rows, indicator_rows
 
 
+def _seed_feeds(conn: psycopg.Connection) -> tuple[int, int]:
+    """KEV lists CVE-2026-12345 (in the corpus) and CVE-2025-0001 (not); EPSS scores both corpus CVEs."""
+    catalog = kev.parse(
+        json.dumps(
+            {
+                "catalogVersion": "fixture",
+                "dateReleased": "2026-10-29T19:09:34.4003Z",
+                "count": 2,
+                "vulnerabilities": [
+                    {
+                        "cveID": "CVE-2026-12345",
+                        "vendorProject": "Example",
+                        "product": "Gateway",
+                        "vulnerabilityName": "Example Gateway Remote Code Execution",
+                        "dateAdded": "2026-10-01",
+                        "knownRansomwareCampaignUse": "Known",
+                    },
+                    {
+                        "cveID": "CVE-2025-0001",
+                        "vendorProject": "Example",
+                        "product": "Router",
+                        "vulnerabilityName": "Example Router Authentication Bypass",
+                        "dateAdded": "2025-06-01",
+                        "knownRansomwareCampaignUse": "Unknown",
+                    },
+                ],
+            }
+        ).encode()
+    )
+    scored = ["CVE-2026-12345", "CVE-2026-0002"]
+    scores = epss.parse(
+        json.dumps(
+            {
+                "status": "OK",
+                "total": 2,
+                "data": [
+                    {
+                        "cve": "CVE-2026-12345",
+                        "epss": "0.97",
+                        "percentile": "0.999",
+                        "date": "2026-10-29",
+                    },
+                    {
+                        "cve": "CVE-2026-0002",
+                        "epss": "0.01",
+                        "percentile": "0.2",
+                        "date": "2026-10-29",
+                    },
+                ],
+            }
+        ).encode(),
+        scored,
+    )
+    return feeds.write_kev(conn, catalog), feeds.write_epss(conn, scores)
+
+
 def _backdate_one_indicator(conn: psycopg.Connection) -> int:
     """Backdate one indicator's synced_at to simulate the canonical drop-out case.
 
@@ -292,6 +356,8 @@ def main() -> int:
 
         dropped = _backdate_one_indicator(conn)
         logger.info("Backdated %d indicator(s) to seed the drop-out scenario", dropped)
+        kev_rows, epss_rows = _seed_feeds(conn)
+        logger.info("Seeded %d KEV entries and %d EPSS scores", kev_rows, epss_rows)
 
     logger.info(
         "Seeded corpus: %d pulses, %d indicators (drop-out: %d)",
