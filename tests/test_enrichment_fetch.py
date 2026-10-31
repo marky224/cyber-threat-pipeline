@@ -1,7 +1,9 @@
 """Tests for cyber_threat_pipeline.enrichment.fetch: the bounds on every feed download.
 
 No network: a scripted adapter answers (tests/fake_http.py), and requests'
-real HTTP adapter is made to fail if anything reaches it.
+real HTTP adapter is made to fail if anything reaches it. The one test that
+puts the real adapter back (a Location urllib3 rejects at connect) makes DNS
+lookups (socket.getaddrinfo) fail instead.
 """
 
 from __future__ import annotations
@@ -178,6 +180,21 @@ def test_the_deadline_is_checked_at_every_hop(monkeypatch: pytest.MonkeyPatch) -
     assert len(adapter.sent) == 2
 
 
+@pytest.mark.parametrize("location", ["https://.evil/x", "https://*/x"])
+def test_the_time_budget_running_out_between_hops_names_the_sender(
+    monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
+    ticks = iter([0.0, 1.0])
+    monkeypatch.setattr(fetch, "monotonic", lambda: next(ticks))
+    redirect = Reply(302, headers={"Location": location})
+    session, adapter = session_with({"feed.example": [redirect, Reply(body=b"ok")]})
+    with pytest.raises(FetchError) as e:
+        get_bytes(session, URL, max_bytes=10, deadline=0.5)
+    # The host that sent the redirect; never the Location, which nobody checked yet.
+    assert str(e.value) == "feed.example: time budget spent"
+    assert len(adapter.sent) == 1
+
+
 def test_a_relative_location_is_followed_without_the_first_requests_params(
     sleeps: list[float],
 ) -> None:
@@ -245,6 +262,35 @@ def test_a_location_urllib3_rejects_at_connect_is_a_fetch_error(
     with pytest.raises(FetchError) as e:
         get_bytes(session, URL, max_bytes=10, deadline=FAR)
     assert str(e.value) == "feed.example: LocationParseError"
+    assert sleeps == []
+
+
+@pytest.mark.parametrize(
+    ("error", "named"),
+    [
+        # The hop's own answer: urllib3 rejects its header (two Content-Lengths, say).
+        pytest.param(
+            requests.exceptions.InvalidHeader("Content-Length contained multiple (1, 2)"),
+            "cdn.example",
+            id="InvalidHeader",
+        ),
+        # The Location itself: still the host that sent it.
+        pytest.param(
+            requests.exceptions.InvalidURL("Failed to parse: https://cdn.example/x"),
+            "feed.example",
+            id="InvalidURL",
+        ),
+    ],
+)
+def test_a_failed_hop_names_the_hop_unless_its_location_is_unusable(
+    sleeps: list[float], error: Exception, named: str
+) -> None:
+    redirect = Reply(302, headers={"Location": "https://cdn.example/x"})
+    session, adapter = session_with({"feed.example": [redirect], "cdn.example": [error]})
+    with pytest.raises(FetchError) as e:
+        get_bytes(session, URL, max_bytes=10, deadline=FAR)
+    assert str(e.value) == f"{named}: {type(error).__name__}"  # the class, never its text
+    assert adapter.hosts() == ["feed.example", "cdn.example"]  # fails at once: no retry
     assert sleeps == []
 
 
