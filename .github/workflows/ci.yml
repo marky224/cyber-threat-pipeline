@@ -135,11 +135,16 @@ jobs:
           uv run python -m scripts.seed_fixture_corpus
 
       - name: dbt build (isolated transform env)
+        # dbt sends anonymous usage stats unless DO_NOT_TRACK is set.
+        env:
+          DO_NOT_TRACK: "1"
         run: |
           cp transform/profiles.yml.example transform/profiles.yml
           make -C transform build
 
       - name: dbt docs generate (smoke-check the lineage graph)
+        env:
+          DO_NOT_TRACK: "1"
         run: make -C transform docs
 
   evidence:
@@ -215,6 +220,8 @@ jobs:
           uv run python -m scripts.seed_fixture_corpus
 
       - name: dbt build (isolated transform env)
+        env:
+          DO_NOT_TRACK: "1"
         run: |
           cp transform/profiles.yml.example transform/profiles.yml
           make -C transform build

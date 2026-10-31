@@ -180,6 +180,7 @@ jobs:
       - name: dbt build (transform)
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          DO_NOT_TRACK: "1"
         run: |
           # transform/profiles.yml is gitignored; copy the template before
           # dbt resolves the profile.
