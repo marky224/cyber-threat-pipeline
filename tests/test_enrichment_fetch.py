@@ -1,7 +1,9 @@
 """Tests for cyber_threat_pipeline.enrichment.fetch: the bounds on every feed download.
 
 No network: a scripted adapter answers (tests/fake_http.py), and requests'
-real HTTP adapter is made to fail if anything reaches it.
+real HTTP adapter is made to fail if anything reaches it. The one test that
+puts the real adapter back (a Location urllib3 rejects at connect) makes DNS
+lookups (socket.getaddrinfo) fail instead.
 """
 
 from __future__ import annotations
