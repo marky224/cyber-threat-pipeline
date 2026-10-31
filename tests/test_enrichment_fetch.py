@@ -248,6 +248,35 @@ def test_a_location_urllib3_rejects_at_connect_is_a_fetch_error(
     assert sleeps == []
 
 
+@pytest.mark.parametrize(
+    ("error", "named"),
+    [
+        # The hop's own answer: urllib3 rejects its header (two Content-Lengths, say).
+        pytest.param(
+            requests.exceptions.InvalidHeader("Content-Length contained multiple (1, 2)"),
+            "cdn.example",
+            id="InvalidHeader",
+        ),
+        # The Location itself: still the host that sent it.
+        pytest.param(
+            requests.exceptions.InvalidURL("Failed to parse: https://cdn.example/x"),
+            "feed.example",
+            id="InvalidURL",
+        ),
+    ],
+)
+def test_a_failed_hop_names_the_hop_unless_its_location_is_unusable(
+    sleeps: list[float], error: Exception, named: str
+) -> None:
+    redirect = Reply(302, headers={"Location": "https://cdn.example/x"})
+    session, adapter = session_with({"feed.example": [redirect], "cdn.example": [error]})
+    with pytest.raises(FetchError) as e:
+        get_bytes(session, URL, max_bytes=10, deadline=FAR)
+    assert str(e.value) == f"{named}: {type(error).__name__}"  # the class, never its text
+    assert adapter.hosts() == ["feed.example", "cdn.example"]  # fails at once: no retry
+    assert sleeps == []
+
+
 def test_new_session_speaks_only_https_and_ignores_the_environment() -> None:
     session = fetch.new_session()
     assert list(session.adapters) == ["https://"]

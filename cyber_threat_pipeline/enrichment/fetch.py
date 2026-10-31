@@ -153,13 +153,18 @@ def _get_once(
         response = session.get_adapter(url).send(request, stream=True, timeout=timeout)
     except (requests.ConnectionError, requests.Timeout) as e:
         raise _Retryable(type(e).__name__) from None
-    except ValueError as e:
-        # A URL requests or urllib3 can't use: requests' InvalidURL (also a
-        # RequestException) or urllib3's LocationParseError (not one), raised while
-        # preparing or connecting. Their messages quote the URL: the class only.
+    except requests.exceptions.InvalidURL as e:
+        # A URL requests can't use, raised while preparing or connecting. Its
+        # message quotes the URL: the class only.
         raise FetchError(f"{sender}: {type(e).__name__}") from None
     except requests.RequestException as e:
+        # The hop's own failure, not retried. InvalidHeader (a bad response header)
+        # is also a ValueError, so this comes before the ValueError clause.
         raise FetchError(f"{host}: {type(e).__name__}") from None
+    except ValueError as e:
+        # A URL urllib3 can't use: its LocationParseError (not a RequestException)
+        # at connect, or a plain ValueError. As for InvalidURL: the class only.
+        raise FetchError(f"{sender}: {type(e).__name__}") from None
     with response:
         status = response.status_code
         if status in _REDIRECTS:
