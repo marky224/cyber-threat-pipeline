@@ -178,6 +178,21 @@ def test_the_deadline_is_checked_at_every_hop(monkeypatch: pytest.MonkeyPatch) -
     assert len(adapter.sent) == 2
 
 
+@pytest.mark.parametrize("location", ["https://.evil/x", "https://*/x"])
+def test_the_time_budget_running_out_between_hops_names_the_sender(
+    monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
+    ticks = iter([0.0, 1.0])
+    monkeypatch.setattr(fetch, "monotonic", lambda: next(ticks))
+    redirect = Reply(302, headers={"Location": location})
+    session, adapter = session_with({"feed.example": [redirect, Reply(body=b"ok")]})
+    with pytest.raises(FetchError) as e:
+        get_bytes(session, URL, max_bytes=10, deadline=0.5)
+    # The host that sent the redirect; never the Location, which nobody checked yet.
+    assert str(e.value) == "feed.example: time budget spent"
+    assert len(adapter.sent) == 1
+
+
 def test_a_relative_location_is_followed_without_the_first_requests_params(
     sleeps: list[float],
 ) -> None:

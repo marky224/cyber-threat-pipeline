@@ -143,7 +143,7 @@ def _get_once(
     """One request: the body, or a redirect's ``Location`` (its body left unread)."""
     left = deadline - monotonic()
     if left <= 0:
-        raise FetchError(f"{host}: time budget spent")
+        raise FetchError(f"{sender}: time budget spent")  # the hop was never requested
     timeout = (min(CONNECT_TIMEOUT, left), min(READ_TIMEOUT, left))
     try:
         request = session.prepare_request(requests.Request("GET", url, params=params))
