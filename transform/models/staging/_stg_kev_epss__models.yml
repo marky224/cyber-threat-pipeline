@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: stg_cisa__kev_vulnerabilities
+    description: "The latest CISA KEV snapshot (rows of raw.kev_vulnerabilities with max(fetched_at))."
+    columns:
+      - name: cve_id
+        tests: [not_null, unique]
+      - name: is_known_ransomware
+        description: "KEV knownRansomwareCampaignUse = 'Known'; false for 'Unknown' or missing."
+        tests: [not_null]
+
+  - name: stg_first__epss_scores
+    description: "The latest FIRST EPSS snapshot (rows of raw.epss_scores with max(fetched_at))."
+    columns:
+      - name: cve_id
+        tests: [not_null, unique]
+      - name: epss
+        description: "Probability of exploitation in the next 30 days, 0-1."
+      - name: percentile
+        description: "Rank of epss among all CVEs FIRST scores, 0-1. Not a probability."
+
+unit_tests:
+  - name: stg_cisa__kev_vulnerabilities_keeps_the_latest_snapshot
+    description: >
+      Only rows with the newest fetched_at are the catalog: an entry CISA dropped
+      (still stored on an older fetched_at) must not read as listed.
+    model: stg_cisa__kev_vulnerabilities
+    given:
+      - input: source('raw', 'kev_vulnerabilities')
+        rows:
+          - {cve_id: 'CVE-2026-0001', known_ransomware_campaign_use: 'Known',   fetched_at: '2026-10-30 13:00:00+00'}
+          - {cve_id: 'CVE-2026-0002', known_ransomware_campaign_use: 'Unknown', fetched_at: '2026-10-30 13:00:00+00'}
+          - {cve_id: 'CVE-2026-0003', known_ransomware_campaign_use: null,      fetched_at: '2026-10-30 13:00:00+00'}
+          - {cve_id: 'CVE-2020-9999', known_ransomware_campaign_use: 'Known',   fetched_at: '2026-10-23 13:00:00+00'}
+    expect:
+      rows:
+        - {cve_id: 'CVE-2026-0001', is_known_ransomware: true}
+        - {cve_id: 'CVE-2026-0002', is_known_ransomware: false}
+        - {cve_id: 'CVE-2026-0003', is_known_ransomware: false}
+
+  - name: stg_first__epss_scores_keeps_the_latest_snapshot
+    description: An id the latest fetch didn't score must read as unscored, not keep last week's score.
+    model: stg_first__epss_scores
+    given:
+      - input: source('raw', 'epss_scores')
+        rows:
+          - {cve_id: 'CVE-2026-0001', epss: 0.97, fetched_at: '2026-10-30 13:00:00+00'}
+          - {cve_id: 'CVE-2026-0002', epss: 0.50, fetched_at: '2026-10-23 13:00:00+00'}
+    expect:
+      rows:
+        - {cve_id: 'CVE-2026-0001', epss: 0.97}

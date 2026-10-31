@@ -54,7 +54,7 @@
       }
     ]
   },
-  "description": "Cyber Threat Pipeline — operational health. Five panels reading pipeline.runs + marts.mart_data_quality + marts.mart_data_quality_history via the grafana_ro role (no raw access).",
+  "description": "Cyber Threat Pipeline — operational health. Eight grid panels reading pipeline.runs, pipeline.brief_evals, marts.mart_data_quality and marts.mart_data_quality_history via the grafana_ro role (no raw access).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -414,6 +414,53 @@
           "format": "time_series",
           "rawQuery": true,
           "rawSql": "select evaluated_at as \"time\", provider as metric, 100.0 * facts_verified / nullif(facts_total, 0) as verified_pct, 100.0 * judge_claims_supported / nullif(judge_claims_total, 0) as judge_pct from pipeline.brief_evals where $__timeFilter(evaluated_at) order by 1;"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Vulnerability feeds (days since last successful fetch)",
+      "description": "Age of the CISA KEV and FIRST EPSS snapshots make enrich last stored, from mart_data_quality.kev_fetched_at / epss_fetched_at (grafana_ro never touches raw). The enrich step is warn-only: a feed that is down or invalid keeps its old snapshot and the run still succeeds, so this age is how a failing feed shows. Weekly runs keep it under 8; above 15 (two missed fetches) alert ctp-vuln-feed-stale fires. Never fetched shows as never.",
+      "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+      "gridPos": { "x": 0, "y": 38, "w": 12, "h": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 8 },
+              { "color": "red", "value": 15 }
+            ]
+          },
+          "mappings": [
+            { "type": "special", "options": { "match": "null", "result": { "text": "never", "color": "red", "index": 0 } } }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "${DS_NEON_RO}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select extract(epoch from now() - kev_fetched_at)/86400 as \"KEV\", extract(epoch from now() - epss_fetched_at)/86400 as \"EPSS\" from marts.mart_data_quality order by run_id desc limit 1;"
         }
       ]
     }

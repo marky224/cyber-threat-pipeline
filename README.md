@@ -12,6 +12,7 @@ AlienVault OTX
    ▼
 Python ETL (cyber_threat_pipeline/ingestion)
    │  extract → transform (pandas) → load (idempotent upsert)
+   │  + enrichment: CISA KEV catalog + FIRST EPSS scores for the CVE ids
    ▼
 Neon Postgres ── raw schema ──►  dbt (transform/)  ──► marts schema
    │                                                      │
@@ -57,13 +58,14 @@ The litmus test: *is this about what the data **means** (→ Evidence) or about 
 
 ## How a weekly run executes
 
-Every Monday at 13:23 UTC, [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) walks five stages:
+Every Monday at 13:23 UTC, [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) walks six stages:
 
 1. **Ingest** (`make ingest`) — pulls OTX pulses modified since the watermark in `pipeline.state`, transforms in pandas, idempotently upserts into Neon's `raw` schema. The watermark advances only on success, so failed runs are replayable.
-2. **Transform** (`make transform`) — the isolated dbt env builds 10 marts (staging → intermediate → marts), runs schema + data tests, captures the result for the audit row.
-3. **Analyse** (`make analysis`) — each LLM provider listed in `ANALYSIS_PROVIDERS` renders the same prompt against the current marts; output replaces `reporting/pages/analyst-brief.md` (gitignored, regenerated each run). Production runs Claude only (`ANALYSIS_PROVIDERS=claude`); adding Grok / GPT / Gemini / local Ollama to that comma-separated list renders them side by side with no code change. Grounding checks then score every brief against its own input (numbers, CVE and pulse ids, quoted names, trend claims with no baseline): the page shows "Grounding: N/M facts verified", the score lands in `pipeline.brief_evals`, and a Grafana alert fires below 90%. The checks warn; they never block the publish.
-4. **Publish** (`make report`) — Evidence builds the static site, syncs to S3 under the GitHub-OIDC deploy role, invalidates CloudFront.
-5. **Audit** — each stage writes a row to `pipeline.runs` with status, row counts, and dbt test outcomes. Grafana reads this table through the read-only `grafana_ro` role; a failure trips the `ctp-run-failure` alert.
+2. **Enrich** (`make enrich`) — downloads the CISA Known Exploited Vulnerabilities catalog and FIRST EPSS exploit-probability scores for the CVE ids the corpus holds, into the `raw` schema. Both feeds are untrusted input: each download is bounded (HTTPS only, timeouts, at most three attempts, a size cap, a time budget) and each response is validated whole. A feed that is down or invalid keeps its last stored snapshot, and the step never fails the run or blocks the publish; a Grafana alert fires once a feed is more than 15 days stale.
+3. **Transform** (`make transform`) — the isolated dbt env builds 11 marts (staging → intermediate → marts), runs schema + data tests, captures the result for the audit row.
+4. **Analyse** (`make analysis`) — each LLM provider listed in `ANALYSIS_PROVIDERS` renders the same prompt against the current marts; output replaces `reporting/pages/analyst-brief.md` (gitignored, regenerated each run). Production runs Claude only (`ANALYSIS_PROVIDERS=claude`); adding Grok / GPT / Gemini / local Ollama to that comma-separated list renders them side by side with no code change. Grounding checks then score every brief against its own input (numbers, CVE and pulse ids, quoted names, trend claims with no baseline): the page shows "Grounding: N/M facts verified", the score lands in `pipeline.brief_evals`, and a Grafana alert fires below 90%. The checks warn; they never block the publish.
+5. **Publish** (`make report`) — Evidence builds the static site, syncs to S3 under the GitHub-OIDC deploy role, invalidates CloudFront.
+6. **Audit** — each stage writes a row to `pipeline.runs` with status, row counts, and dbt test outcomes. Grafana reads this table through the read-only `grafana_ro` role; a failure trips the `ctp-run-failure` alert.
 
 Every stage is reproducible locally with the same `make` target — local dev and the weekly cron invoke identical commands.
 
@@ -79,6 +81,7 @@ Every stage is reproducible locally with the same `make` target — local dev an
 |---|---|
 | Warehouse | Neon (serverless Postgres, pooled connection) |
 | Ingestion | Python 3.12, `uv`, pandas, `OTXv2` SDK |
+| Enrichment | CISA KEV catalog (JSON feed) + FIRST EPSS API · `requests` with strict bounds · strict `pydantic` validation |
 | Transformation | dbt Core (Postgres adapter) |
 | Reporting | Evidence.dev → S3 + CloudFront (us-east-1) |
 | Monitoring | Grafana Cloud (free tier) |
@@ -93,11 +96,12 @@ Every stage is reproducible locally with the same `make` target — local dev an
 cyber_threat_pipeline/      Python app package
 ├── core/                   Config (pydantic-settings), logging, Neon connection helpers
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
+├── enrichment/             CISA KEV + FIRST EPSS for the corpus's CVE ids → `raw` · bounded downloads · validated whole · warn-only
 └── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
 sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
-transform/                  dbt Core (isolated env) · 10 marts · staging → intermediate → marts · schema + data tests
+transform/                  dbt Core (isolated env) · 11 marts · staging → intermediate → marts · schema + data tests
 reporting/                  Evidence.dev (Node 24 LTS) · 3 pages · postgres datasource via single connection-string env
-monitoring/                 Grafana dashboard (6 panels) + alerts (5 rules) as code · no UI state
+monitoring/                 Grafana dashboard (8 panels) + alerts (6 rules) as code · no UI state
 infra/                      Terraform · S3 + CloudFront + ACM + Route 53 + GitHub OIDC deploy role · no static AWS keys
 tests/                      pytest
 docs/                       architecture.md (annotated diagram) + screenshots/

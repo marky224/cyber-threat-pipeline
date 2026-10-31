@@ -7,6 +7,7 @@ This document is the annotated companion to the high-level diagram in the [READM
 ```mermaid
 flowchart TB
     OTX[AlienVault OTX<br/>threat intel feed]
+    Feeds[CISA KEV · FIRST EPSS<br/>exploited CVEs · exploit scores]
 
     subgraph GH["GitHub Actions"]
         Cron(["Weekly cron · Mon 13:23 UTC<br/>+ workflow_dispatch"])
@@ -14,6 +15,7 @@ flowchart TB
 
     subgraph App["Python ETL · uv · Python 3.12"]
         Ingest["ingestion<br/>extract → transform → load<br/>watermark-driven upsert"]
+        Enrich["enrichment<br/>KEV catalog + EPSS scores<br/>validated · warn-only"]
         Analysis["analysis<br/>LLM analyst brief<br/>Claude primary · 5 providers swappable<br/>any 2 side-by-side"]
     end
 
@@ -38,16 +40,19 @@ flowchart TB
     end
 
     subgraph Ops["Grafana Cloud · free tier"]
-        Dash["Operational dashboard<br/>5 panels"]
-        Alerts["4 alert rules<br/>JSON + YAML provisioned"]
+        Dash["Operational dashboard<br/>8 panels"]
+        Alerts["6 alert rules<br/>JSON + YAML provisioned"]
     end
 
     OTX --> Ingest
+    Feeds --> Enrich
     Cron -.dispatches.-> Ingest
+    Cron -.dispatches.-> Enrich
     Cron -.dispatches.-> DBT
     Cron -.dispatches.-> Analysis
     Cron -.dispatches.-> Build
     Ingest --> Raw
+    Enrich --> Raw
     Raw --> DBT
     DBT --> Marts
     Marts --> Analysis
@@ -69,21 +74,28 @@ flowchart TB
 
 **AlienVault OTX** — public threat-intelligence feed (pulses, indicators, references). Accessed via the `OTXv2` Python SDK. The pipeline is read-only against OTX and uses a `modified_since` watermark for incremental fetches.
 
+**CISA KEV** — the Known Exploited Vulnerabilities catalog, CISA's list of CVEs exploited in the wild (CC0). The whole JSON feed is downloaded each run from cisa.gov, or from CISA's `cisagov/kev-data` GitHub mirror if cisa.gov fails.
+
+**FIRST EPSS** — the Exploit Prediction Scoring System: per CVE, the probability of exploitation in the next 30 days and its percentile. Looked up through FIRST's API (marked BETA by FIRST) for the CVE ids the corpus holds, in batches of at most 100 ids.
+
+Neither feed needs a key. Both are treated as untrusted input; see `enrichment/` below.
+
 ### Orchestration
 
 **GitHub Actions** — two workflows:
 
 - `ci.yml` runs on every push/PR: lint (ruff), type-check (mypy, strict), unit tests (pytest), gitleaks, dbt build+test, Evidence build, terraform validate.
-- `pipeline.yml` runs weekly (Mon 13:23 UTC) and on manual dispatch: ingest → transform → analyse → publish. This is the *only* mechanism that writes to production Neon or deploys to AWS.
+- `pipeline.yml` runs weekly (Mon 13:23 UTC) and on manual dispatch: ingest → enrich → transform → analyse → publish. This is the *only* mechanism that writes to production Neon or deploys to AWS.
 
 No other scheduler exists. The Makefile is the single source of truth for stage commands; both workflows invoke `make <target>`.
 
 ### Python application (`cyber_threat_pipeline/`)
 
-Python 3.12, managed by `uv` (lockfile is authoritative). Three subpackages:
+Python 3.12, managed by `uv` (lockfile is authoritative). Four subpackages:
 
 - `core/` — config (`pydantic-settings`), logging, Neon connection helpers.
 - `ingestion/` — `extract` (OTX SDK) → `transform` (pandas) → `load` (idempotent `INSERT … ON CONFLICT` upsert into Neon's `raw` schema). Watermark lives in `pipeline.state.modified_since`.
+- `enrichment/` — CISA KEV and FIRST EPSS for the corpus's CVE indicators, upserted into `raw.kev_vulnerabilities` / `raw.epss_scores`. Every download is HTTPS-only, size-capped, time-boxed and retried at most three times; every response is validated whole (strict types, CVE-id patterns, counts) or dropped. A feed that is down or invalid keeps its stored snapshot, and the step exits 0.
 - `analysis/` — LLM analyst brief. Reads from `marts`, prompts the configured **primary** and **secondary** providers (Claude · Grok · GPT · Gemini · local Ollama), writes a side-by-side markdown page consumed by Evidence.
 
 The analyst is provider-agnostic by design: a single env-var (`ANALYSIS_PRIMARY_PROVIDER`) swaps the model behind the brief, and any two providers render in tabbed comparison on the same input. Claude is the production primary; the code default is `local` (Ollama) so dev/CI runs without any cloud API keys.
@@ -107,7 +119,7 @@ dbt Core with the Postgres adapter, in its **own isolated environment** (its own
 
 - `staging/` — light cleanup, renames, type casts on `raw`.
 - `intermediate/` — joins, deduplication, business-logic glue.
-- `marts/` — the 10 published tables Evidence and Grafana query.
+- `marts/` — the 11 published tables Evidence and Grafana query.
 
 Every model has schema tests (`not_null`, `unique`, `relationships`) and selected data tests. `dbt build` runs models and tests in one pass; the captured test result is written into the `pipeline.runs` audit row by the orchestrator.
 
@@ -133,8 +145,8 @@ The OIDC provider is a `data` lookup (not a `resource`) so the same Terraform ap
 
 Grafana Cloud free tier. Two artifacts checked into git:
 
-- `dashboard.json` — the operational dashboard (5 panels: run health over time, ingestion volume and drift, freshness (pipeline and intel), dbt test results over time, data-quality trends).
-- `alerts.yaml` — 4 alert rules (run failure, stale data, dbt test regression, ingest row-count drop), eval interval 900s.
+- `dashboard.json` — the operational dashboard (8 panels: run health over time, ingestion volume and drift, freshness (pipeline and intel), dbt test results over time, data-quality trends, analyst-brief grounding, vulnerability-feed age).
+- `alerts.yaml` — 6 alert rules (run failure, stale data, dbt test regression, ingest row-count drop, analyst-brief grounding below 90%, a vulnerability feed over 15 days stale), eval interval 900s.
 
 The Grafana datasource is the `grafana_ro` Neon role. The dashboard and alerts are provisioned via the Grafana HTTP API at install time — no UI-edited state. A `<NEON_RO_UID>` placeholder in `alerts.yaml` is substituted at provisioning time from the datasource API response.
 
@@ -148,23 +160,28 @@ The Grafana datasource is the `grafana_ro` Neon role. The dashboard and alerts a
      → INSERT … ON CONFLICT into raw.{pulses, indicators, references}
      → UPDATE pipeline.state SET modified_since = NOW()
      → INSERT INTO pipeline.runs (stage='ingest', status='ok', rows=…)
-3. make transform
+3. make enrich
+     → GET the CISA KEV catalog (cisa.gov, else the GitHub mirror)
+     → GET FIRST EPSS scores for the corpus's CVE ids (≤ 100 per call)
+     → INSERT … ON CONFLICT into raw.{kev_vulnerabilities, epss_scores}
+       (a failed feed keeps its stored snapshot; the step never fails the run)
+4. make transform
      → dbt build (in isolated env)
    make record-dbt
      → UPDATE pipeline.runs SET dbt_tests_{passed,failed,skipped,warned}=… (latest row)
-4. make analysis
+5. make analysis
      → SELECT … FROM marts
      → primary_provider.complete(prompt)  ── Claude in prod
      → secondary_provider.complete(prompt)
      → write reporting/pages/analyst-brief.md (side-by-side tabs)
      → INSERT INTO pipeline.runs (stage='analysis', status='ok')
-5. make report
+6. make report
      → npm run build (Evidence reads from marts at build time)
      → assume IAM role via OIDC
      → aws s3 sync reporting/build/ s3://cyber-threat-pipeline-site/
      → aws cloudfront create-invalidation
      → INSERT INTO pipeline.runs (stage='report', status='ok')
-6. Grafana Cloud (out of band)
+7. Grafana Cloud (out of band)
      → queries marts + pipeline.runs through grafana_ro
      → evaluates alert rules every 900s
 ```
@@ -178,6 +195,7 @@ Any stage failure writes a `failed` row to `pipeline.runs` and trips the `ctp-ru
 | GitHub Actions → AWS | OIDC-assumed IAM role; trust policy pins `sub` to `repo:<owner>/<repo>:ref:refs/heads/main` and `…:environment:production`. No static keys. |
 | Grafana Cloud → Neon | `grafana_ro` role; read-only, scoped to `marts` + `pipeline.runs`. |
 | Evidence build → Neon | Build-time queries via the application role; static output bakes results into HTML, no live DB connection from the published site. |
+| Enrichment → CISA / FIRST | HTTPS GET only, no credentials sent; the `pipeline.yml` step blanks the AWS credentials in its environment. Responses are size-capped and validated whole before anything is written. |
 | LLM providers → Neon | Providers never see the database — the analyst step fetches data first, then sends a synthesized prompt. |
 | `_private/` content | Never crosses the public boundary: `.gitignore` excludes `_private/`, `CLAUDE.md`, `.env`. CI runs `gitleaks` on every push. |
 

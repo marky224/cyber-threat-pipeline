@@ -31,6 +31,31 @@ sources:
                     to: source('raw', 'pulses')
                     field: id
 
+      - name: kev_vulnerabilities
+        description: >
+          CISA KEV catalog entries, upserted by cyber_threat_pipeline.enrichment.
+          Each successful fetch writes every entry with one fetched_at; the latest
+          snapshot is the rows with max(fetched_at).
+        columns:
+          - name: cve_id
+            tests: [not_null, unique]
+          - name: known_ransomware_campaign_use
+            tests:
+              - accepted_values:
+                  arguments:
+                    values: ['Known', 'Unknown']
+                    quote: true
+                  config:
+                    severity: warn
+
+      - name: epss_scores
+        description: >
+          FIRST EPSS scores for the corpus's CVE ids, upserted by
+          cyber_threat_pipeline.enrichment. Latest snapshot = rows with max(fetched_at).
+        columns:
+          - name: cve_id
+            tests: [not_null, unique]
+
   - name: pipeline
     database: "{{ env_var('NEON_DB') }}"
     schema: pipeline

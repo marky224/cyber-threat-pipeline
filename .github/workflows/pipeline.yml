@@ -111,6 +111,32 @@ jobs:
         run: make ingest
 
       # -------------------------------------------------------------------
+      # Enrich — CISA KEV + FIRST EPSS → Neon raw schema
+      # Downloads two outside feeds for the CVE ids ingest just wrote and
+      # validates each response whole before writing (cyber_threat_pipeline/
+      # enrichment). Warn-only: a feed that is down or invalid keeps its
+      # stored snapshot and `make enrich` still exits 0.
+      # continue-on-error + timeout-minutes: a database error, a bug or a
+      # hang here must not block dbt, the brief or the publish either; the
+      # job stays green and the step shows the failure.
+      # The OIDC step above exported AWS credentials to every later step's
+      # environment. This step parses outside data and needs no AWS, so it
+      # blanks them (a step's env overrides the exported values). Ingest is
+      # left as it was. The step can still request a GitHub OIDC token (the
+      # workflow grants id-token: write), but the deploy role ARN is not in
+      # its env.
+      # -------------------------------------------------------------------
+      - name: Enrich CVEs (CISA KEV + FIRST EPSS)
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        run: make enrich
+
+      # -------------------------------------------------------------------
       # [phase 3] Transform — dbt build (isolated transform/ env)
       #
       # dbt-postgres reads discrete NEON_HOST/PORT/USER/PASSWORD/DB/SSLMODE

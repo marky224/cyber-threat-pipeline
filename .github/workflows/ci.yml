@@ -126,7 +126,8 @@ jobs:
             -f sql/20_pipeline.sql \
             -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql \
-            -f sql/31_brief_evals.sql
+            -f sql/31_brief_evals.sql \
+            -f sql/32_kev_epss.sql
 
       - name: Sync app env (frozen) + seed fixture corpus
         run: |
@@ -205,7 +206,8 @@ jobs:
             -f sql/20_pipeline.sql \
             -f sql/21_runs_dbt_tests_warned.sql \
             -f sql/30_grafana_role.sql \
-            -f sql/31_brief_evals.sql
+            -f sql/31_brief_evals.sql \
+            -f sql/32_kev_epss.sql
 
       - name: Sync app env (frozen) + seed fixture corpus
         run: |
@@ -302,7 +304,7 @@ jobs:
           d = yaml.safe_load(open('monitoring/alerts.yaml'))
           assert d['apiVersion'] == 1, 'alerts.yaml: apiVersion != 1'
           rules = d['groups'][0]['rules']
-          assert len(rules) == 5, f'alerts.yaml: expected 5 rules, got {len(rules)}'
+          assert len(rules) == 6, f'alerts.yaml: expected 6 rules, got {len(rules)}'
           print(f'OK alerts.yaml — {len(rules)} rules')
           "
 
