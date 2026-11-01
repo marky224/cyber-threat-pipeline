@@ -197,7 +197,7 @@ Any stage failure writes a `failed` row to `pipeline.runs` and trips the `ctp-ru
 | Evidence build → Neon | Build-time queries via the application role; static output bakes results into HTML, no live DB connection from the published site. |
 | Enrichment → CISA / FIRST | HTTPS GET only, no credentials sent; the `pipeline.yml` step blanks the AWS credentials in its environment. Responses are size-capped and validated whole before anything is written. |
 | LLM providers → Neon | Providers never see the database — the analyst step fetches data first, then sends a synthesized prompt. |
-| `_private/` content | Never crosses the public boundary: `.gitignore` excludes `_private/`, `CLAUDE.md`, `.env`. CI runs `gitleaks` on every push. |
+| `_private/` content | Never crosses the public boundary: private material is kept out of git by per-checkout excludes, and `.gitignore` excludes `.env`. CI runs `gitleaks` on every push. |
 
 ## Why this shape
 

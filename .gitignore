@@ -1,11 +1,3 @@
-# ----- Privacy boundary (must come first) -----
-# CLAUDE.md is local context for Claude Code only — never publish.
-/CLAUDE.md
-# All internal design docs, locked decisions, specs, and handoffs.
-/_private/
-# Claude Code harness state (per-machine, per-checkout).
-/.claude/
-
 # ----- Secrets -----
 .env
 .env.*
