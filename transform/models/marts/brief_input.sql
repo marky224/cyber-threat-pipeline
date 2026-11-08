@@ -84,6 +84,57 @@ emerging_indicators_7d as (
         where first_seen_at >= now() - interval '7 days' and is_active
         group by type
     ) t
+),
+-- The EPSS threshold and the cap on listed KEV ids, written only here: the
+-- prompt, the eval and the /cves page read them from this row.
+cve_params as (
+    select 0.1::numeric as epss_threshold, 15 as kev_cves_cap
+),
+-- loaded is false until a feed's first successful fetch. Its counts are then
+-- NULL, never 0, so the brief can't say "0 in KEV" for a feed it never read.
+kev_snapshot as (
+    select
+        count(*) > 0                                        as loaded,
+        (max(catalog_released_at) at time zone 'UTC')::date as catalog_date
+    from {{ ref('stg_cisa__kev_vulnerabilities') }}
+),
+epss_snapshot as (
+    select count(*) > 0 as loaded, max(score_date) as score_date
+    from {{ ref('stg_first__epss_scores') }}
+),
+-- This week's CVEs: the same 7-day window as emerging_indicators_7d.
+week_cves as (
+    select cve_id, in_kev, epss
+    from {{ ref('mart_cve_enrichment') }}
+    where seen_7d
+),
+kev_ranked as (
+    select cve_id, row_number() over (order by epss desc nulls last, cve_id) as rn
+    from week_cves
+    where in_kev
+),
+-- Only counts, the threshold, CVE ids and ISO dates: no KEV free text (vendor,
+-- product, name, catalogVersion) reaches the prompt.
+cve_exploitation_7d as (
+    select jsonb_build_object(
+        'cves',                 (select count(*) from week_cves),
+        'in_kev',               case when k.loaded then
+                                    (select count(*) from week_cves where in_kev) end,
+        'epss_high',            case when e.loaded then
+                                    (select count(*) from week_cves where epss >= p.epss_threshold) end,
+        'epss_high_not_in_kev', case when k.loaded and e.loaded then
+                                    (select count(*) from week_cves
+                                     where epss >= p.epss_threshold and not in_kev) end,
+        'epss_threshold',       p.epss_threshold,
+        'kev_cves',             coalesce((select jsonb_agg(cve_id order by rn) from kev_ranked
+                                          where rn <= p.kev_cves_cap), '[]'::jsonb),
+        'kev_cves_cap',         p.kev_cves_cap,
+        'kev_catalog_date',     k.catalog_date,
+        'epss_score_date',      e.score_date
+    ) as cve_exploitation_7d
+    from cve_params p
+    cross join kev_snapshot k
+    cross join epss_snapshot e
 )
 select
     now()                                                  as generated_at,
@@ -93,4 +144,5 @@ select
     (select top_tags from top_tags)                        as top_tags,
     (select top_industries from top_industries)            as top_industries,
     (select emerging_pulses_7d from emerging_pulses_7d)    as emerging_pulses_7d,
-    (select emerging_indicators_7d from emerging_indicators_7d) as emerging_indicators_7d
+    (select emerging_indicators_7d from emerging_indicators_7d) as emerging_indicators_7d,
+    (select cve_exploitation_7d from cve_exploitation_7d)  as cve_exploitation_7d
