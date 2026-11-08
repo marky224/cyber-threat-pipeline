@@ -1,12 +1,13 @@
 # reporting/ — Evidence.dev analytical site
 
-The public face of the project. Three pages, baked weekly from the marts:
+The public face of the project. Four pages, baked weekly from the marts:
 
 | Page | URL | Source |
 |---|---|---|
 | Overview / Indicators | `/` | `pages/index.md` |
 | Freshness & Data Quality | `/freshness` | `pages/freshness.md` |
 | Analyst Brief | `/analyst-brief` | `pages/analyst-brief.md` (written by `cyber_threat_pipeline/analysis` — **do not hand-edit**) |
+| Exploited CVEs | `/cves` | `pages/cves.md` |
 
 Spec: `_private/specs/05-reporting-evidence.md`.
 
@@ -74,8 +75,9 @@ Evidence components by name.
 | `top_industries.sql` | `marts.mart_top_industries` (top 10) | Overview bar chart |
 | `pulse_trends_monthly.sql` | `marts.mart_pulse_trends_monthly` (last 12 months) | Overview line charts |
 | `indicator_freshness.sql` | `marts.mart_indicator_freshness` | Freshness stacked bar |
-| `data_quality.sql` | `marts.mart_data_quality` | Freshness snapshot table |
+| `data_quality.sql` | `marts.mart_data_quality` | Freshness snapshot table, Exploited CVEs "as of" line |
 | `tlp_distribution.sql` | `marts.mart_data_quality.tlp_distribution` (JSONB unpacked) | Freshness bar chart |
+| `cve_enrichment.sql` | `marts.mart_cve_enrichment` (KEV first, then EPSS), plus the EPSS threshold from `marts.brief_input` | Exploited CVEs KPIs and table |
 
 ## Boundary: `pages/analyst-brief.md` is generated, not hand-edited
 

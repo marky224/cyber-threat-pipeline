@@ -7,6 +7,9 @@
 -- numeric). Evidence's `0.00%` format multiplies by 100 at render time,
 -- so we divide by 100 here — otherwise the page renders "10000.00%"
 -- instead of "100.00%". The mart value is unchanged.
+--
+-- The kev_/epss_ columns give the /cves page its "as of" line; they are NULL
+-- until that feed's first successful fetch.
 select
     run_id,
     started_at,
@@ -17,5 +20,8 @@ select
     dropped_indicators,
     orphan_indicators,
     null_indicator_value,
-    pct_active / 100.0 as pct_active
+    pct_active / 100.0 as pct_active,
+    kev_catalog_version,
+    kev_fetched_at,
+    epss_score_date
 from marts.mart_data_quality;

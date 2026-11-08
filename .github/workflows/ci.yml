@@ -266,6 +266,7 @@ jobs:
           test -f reporting/build/index.html
           test -f reporting/build/freshness/index.html
           test -f reporting/build/analyst-brief/index.html
+          test -f reporting/build/cves/index.html
 
       - name: Secret-grep build/ (spec 05 §7)
         run: |
