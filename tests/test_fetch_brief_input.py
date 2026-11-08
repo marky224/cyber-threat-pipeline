@@ -16,6 +16,19 @@ import pytest
 
 from cyber_threat_pipeline.analysis.prompt import fetch_brief_input
 
+# The CI seed's row: one KEV-listed, EPSS-scored CVE of two this week.
+CVE_EXPLOITATION = {
+    "cves": 2,
+    "in_kev": 1,
+    "epss_high": 1,
+    "epss_high_not_in_kev": 0,
+    "epss_threshold": 0.1,
+    "kev_cves": ["CVE-2026-12345"],
+    "kev_cves_cap": 15,
+    "kev_catalog_date": "2026-10-29",
+    "epss_score_date": "2026-10-29",
+}
+
 
 def _create_brief_input_table(conn: psycopg.Connection) -> None:
     """Create marts.brief_input with the same column shape as the dbt mart."""
@@ -32,7 +45,8 @@ def _create_brief_input_table(conn: psycopg.Connection) -> None:
                 top_tags                jsonb,
                 top_industries          jsonb,
                 emerging_pulses_7d      jsonb,
-                emerging_indicators_7d  jsonb
+                emerging_indicators_7d  jsonb,
+                cve_exploitation_7d     jsonb
             );
             """
         )
@@ -44,9 +58,11 @@ def _insert_fixture_row(conn: psycopg.Connection) -> None:
             """
             INSERT INTO marts.brief_input (
                 generated_at, corpus_header, top_types, top_countries,
-                top_tags, top_industries, emerging_pulses_7d, emerging_indicators_7d
+                top_tags, top_industries, emerging_pulses_7d, emerging_indicators_7d,
+                cve_exploitation_7d
             )
-            VALUES (now(), %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
+            VALUES (now(), %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb,
+                    %s::jsonb)
             """,
             (
                 json.dumps(
@@ -76,11 +92,12 @@ def _insert_fixture_row(conn: psycopg.Connection) -> None:
                     ]
                 ),
                 json.dumps([{"type": "IPv4", "count": 3}]),
+                json.dumps(CVE_EXPLOITATION),
             ),
         )
 
 
-def test_fetch_brief_input_returns_all_eight_fields(
+def test_fetch_brief_input_returns_every_field(
     pg_conn: psycopg.Connection,
 ) -> None:
     _create_brief_input_table(pg_conn)
@@ -97,11 +114,23 @@ def test_fetch_brief_input_returns_all_eight_fields(
         "top_industries",
         "emerging_pulses_7d",
         "emerging_indicators_7d",
+        "cve_exploitation_7d",
     }
     assert set(brief.keys()) == expected_keys
     # Every field non-null in this fixture (the fixture is the happy path).
     for k, v in brief.items():
         assert v is not None, f"{k} should not be None"
+
+
+def test_fetch_brief_input_reads_cve_exploitation_7d(
+    pg_conn: psycopg.Connection,
+) -> None:
+    _create_brief_input_table(pg_conn)
+    _insert_fixture_row(pg_conn)
+
+    brief = fetch_brief_input(pg_conn)
+
+    assert brief.get("cve_exploitation_7d") == CVE_EXPLOITATION
 
 
 def test_fetch_brief_input_jsonb_decodes_to_python(
