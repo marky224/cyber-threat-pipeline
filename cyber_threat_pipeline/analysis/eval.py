@@ -42,7 +42,8 @@ Checks (``Finding.check`` codes are stable; Grafana and tests key on them):
   an unclosed quote the mark before the space closes that quote instead. A
   curly quote ends at its first ” and can't hold another “. A quote mark left
   unpaired is plain text, no fact.
-- ``cve_unknown``: every CVE id appears in an input pulse name or tag.
+- ``cve_unknown``: every CVE id appears in an input pulse name or tag, or is
+  a KEV-listed id of the CVE block (``kev_cves``, below).
 - ``number_unsupported``: every number is in the allowed set for its scope and
   unit (rules below).
 - ``comparison_without_baseline``: a sentence uses trend words (spike, surge,
@@ -120,8 +121,10 @@ Number rules (``number_unsupported``):
   domains, URLs, IPv4,
   MD5 ...
   CVEs, vulnerabil-    per cited pulse: its CVE count (cve-* tags plus CVE ids in
-  ities, zero-days,    its name); the emerging CVE type count. Never a sum across
-  flaws                pulses.
+  ities, zero-days,    its name); the emerging CVE type count; with the CVE
+  flaws                block, this week's CVEs, its KEV, EPSS-high and
+                       EPSS-high-not-in-KEV counts, and CVEs minus KEV. Never a
+                       sum across pulses.
   countries, nations,  per cited pulse: its number of targeted countries; of
   states (plural only; EU-27 members when "EU"/"European" (alone or as part of
   singular "state" is  a compound like "EU-member") sits between the number
@@ -139,14 +142,20 @@ Number rules (``number_unsupported``):
                        "week" aside), how many emerging pulses mention it in
                        their name, tags or countries
   tags                 top-5 tag counts
-  days, weeks          7
+  days, weeks          7; with the CVE block, also 30 in a sentence that names
+                       EPSS (its 30-day window)
   %                    100*a/b at the stated precision, a from the other sets,
                        b one of: total pulses, total/active indicators, emerging
-                       pulses, emerging indicators, a cited pulse's indicators
+                       pulses, emerging indicators, a cited pulse's indicators,
+                       this week's CVEs; also 100 * the EPSS threshold
   (no unit at all)     all of the global values above, plus the cited pulses'
                        own numbers (indicators, CVEs, countries, any number in
-                       their name or tags)
+                       their name or tags), plus the EPSS threshold
   ===================  ==========================================================
+
+- The CVE block is ``brief_input.cve_exploitation_7d``, the counts the prompt
+  shows under "Exploited CVEs this week". A count whose feed has no snapshot
+  is None and allows nothing; without the block every rule is as above.
 
 - Matching: an exact value matches. ``N+`` and "over/more than/at least N"
   mean at least N, read at N's leading-digit precision: they match a value v
@@ -159,6 +168,7 @@ Number rules (``number_unsupported``):
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -190,6 +200,7 @@ EU27 = frozenset(
 _HEX_ID = re.compile(r"\b[0-9a-f]{24}\b")
 _ID_CITATION = re.compile(r"\bid=[0-9a-f]{24}\b")
 _CVE = re.compile(r"\bCVE-\d{4}-\d{4,}\b", re.IGNORECASE)
+_EPSS = re.compile(r"\bEPSS\b", re.IGNORECASE)
 _WORD = re.compile(r"[A-Za-z0-9][\w'\u2019.\-/]*")
 _HEADING = re.compile(r"^\s*#{1,6}\s+(.*)$")
 # The only line that opens or switches a section: "## Emerging threats".
@@ -399,6 +410,7 @@ def evaluate(brief_md: str, brief_input: dict[str, Any]) -> EvalResult:
     pulses = _pulses(brief_input)
     blocks, headings = _blocks(brief_md, pulses)
     globals_ = _global_values(brief_input, pulses)
+    kev_ids = _kev_ids(brief_input)
 
     findings: list[Finding] = []
     facts = 0
@@ -411,7 +423,7 @@ def evaluate(brief_md: str, brief_input: dict[str, Any]) -> EvalResult:
     for check, scope in (
         (_check_pulse_ids, blocks),
         (_check_quoted_names, blocks),
-        (_check_cves, blocks),
+        (functools.partial(_check_cves, extra=kev_ids), blocks),
         (_check_numbers, blocks),
     ):
         checked, found = check(scope, pulses, globals_)
@@ -462,6 +474,18 @@ def _pulses(brief_input: dict[str, Any]) -> list[_Pulse]:
     return out
 
 
+def _cve_block(brief_input: dict[str, Any]) -> dict[str, Any]:
+    """``brief_input.cve_exploitation_7d``, or {} when the row has none."""
+    block = brief_input.get("cve_exploitation_7d")
+    return block if isinstance(block, dict) else {}
+
+
+def _kev_ids(brief_input: dict[str, Any]) -> frozenset[str]:
+    """The CVE block's KEV-listed ids, lowercased: the prompt lists them."""
+    ids = _cve_block(brief_input).get("kev_cves") or []
+    return frozenset(c.lower() for c in ids if isinstance(c, str) and _CVE.fullmatch(c))
+
+
 def _global_values(brief_input: dict[str, Any], pulses: list[_Pulse]) -> dict[str, set[float]]:
     header = brief_input.get("corpus_header") or {}
     header_vals = {float(v) for v in header.values() if isinstance(v, int | float)}
@@ -480,15 +504,33 @@ def _global_values(brief_input: dict[str, Any], pulses: list[_Pulse]) -> dict[st
         float(header.get(k, 0)) for k in ("total_pulses", "total_indicators", "active_indicators")
     }
     totals |= {float(len(pulses)), float(sum(emerging.values()))}
+    # The CVE block's counts, plus cves - in_kev, the one subtraction it
+    # invites ("two are not in KEV"). A None count (no feed snapshot) adds none.
+    block = _cve_block(brief_input)
+    cves, in_kev = block.get("cves"), block.get("in_kev")
+    week_cves = {
+        float(block[k])
+        for k in ("cves", "in_kev", "epss_high", "epss_high_not_in_kev")
+        if isinstance(block.get(k), int)
+    }
+    if isinstance(cves, int):
+        totals.add(float(cves))
+        if isinstance(in_kev, int):
+            week_cves.add(float(cves - in_kev))
+    threshold = block.get("epss_threshold")
+    epss_threshold = {float(threshold)} if isinstance(threshold, int | float) else set()
     return {
         "indicator": header_vals | types | set(emerging.values()) | pulse_inds,
-        "cve": {emerging["CVE"]} if "CVE" in emerging else set(),
+        "cve": ({emerging["CVE"]} if "CVE" in emerging else set()) | week_cves,
         "pulse": {float(len(pulses))} | top_pulse_counts,
         "tag": tags,
         "day": {7.0},
+        # EPSS scores the next 30 days; _allowed takes it only where EPSS is named.
+        "epss_day": {30.0} if block else set(),
+        "epss_threshold": epss_threshold,
         "totals": {t for t in totals if t > 0},
         "bare": header_vals | types | set(emerging.values()) | top_pulse_counts | pulse_inds
-        | {float(len(pulses)), 7.0},
+        | {float(len(pulses)), 7.0} | week_cves,
     }  # fmt: skip
 
 
@@ -668,8 +710,11 @@ def _check_quoted_names(blocks: list[_Block], pulses: list[_Pulse], _g: object) 
     return checked, found
 
 
-def _check_cves(blocks: list[_Block], pulses: list[_Pulse], _g: object) -> _Check:
-    known = {c.lower() for p in pulses for c in _CVE.findall(p.text)}
+def _check_cves(
+    blocks: list[_Block], pulses: list[_Pulse], _g: object, extra: frozenset[str] = frozenset()
+) -> _Check:
+    """``extra``: more known ids, lowercased (the CVE block's ``kev_cves``)."""
+    known = {c.lower() for p in pulses for c in _CVE.findall(p.text)} | extra
     checked, found = 0, []
     for b in blocks:
         for s in _sentences(b.text):
@@ -908,15 +953,15 @@ def _allowed(
     if unit == "tag":
         return g["tag"]
     if unit == "day":
-        return g["day"]
+        return g["day"] | (g["epss_day"] if _EPSS.search(sentence) else set())
     if unit == "percent":
         numerators = g["bare"] | cited_vals
         denominators = g["totals"] | {float(p.indicators) for p in cited if p.indicators}
         decimals = len(n.raw.split(".")[1].rstrip("%")) if "." in n.raw else 0
         return {
             round(100 * a / b, decimals) for a in numerators for b in denominators if 0 < a <= b
-        }
-    return g["bare"] | cited_vals
+        } | {round(100 * t, decimals) for t in g["epss_threshold"]}
+    return g["bare"] | cited_vals | g["epss_threshold"]
 
 
 def _named_items(sentence: str, start: int, end: int) -> set[float]:

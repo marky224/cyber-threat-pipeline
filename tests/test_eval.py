@@ -1606,3 +1606,104 @@ def test_bold_names_before_a_quoted_abbreviation_still_count_as_named_items() ->
     # "two botnets" is the two bold names before it, past the quoted "U.S.".
     md = _brief(f'**Routerbot** and **Kimsuky** ride "U.S. Fake Kit" as two botnets. (id={ID_A})')
     assert _findings(md, "number_unsupported") == []
+
+
+# --------------------------------------------------------------------------
+# The CVE block (brief_input.cve_exploitation_7d)
+# --------------------------------------------------------------------------
+
+CVE_BLOCK: dict[str, Any] = {
+    "cves": 14,
+    "in_kev": 12,
+    "epss_high": 9,
+    "epss_high_not_in_kev": 1,
+    "epss_threshold": 0.1,
+    "kev_cves": ["CVE-2026-20001", "CVE-2025-30002"],
+    "kev_cves_cap": 2,
+    "kev_catalog_date": "2026-10-30",
+    "epss_score_date": "2026-11-01",
+}
+
+
+def _cve_findings(sentence: str, check: str, **block: Any) -> list[Finding]:
+    """Findings of ``check`` for ``sentence`` as a Contrast bullet, on SYNTH plus the block."""
+    synth = json.loads(json.dumps(SYNTH))
+    synth["cve_exploitation_7d"] = {**CVE_BLOCK, **block}
+    md = _brief(f"Routerbot. (id={ID_A})", contrast=f"- {sentence}")
+    return [f for f in evaluate(md, synth).findings if f.check == check]
+
+
+def _unsupported(found: list[Finding]) -> list[str]:
+    """Each finding's number and unit: "'30' (day)"."""
+    return [f.detail.split(" is not supported")[0] for f in found]
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "12 of this week's 14 CVEs are in CISA's KEV catalog.",
+        "Twelve of this week's CVEs are known exploited.",
+        "12 of 14 CVEs (86%) are in CISA's KEV catalog.",
+    ],
+)
+def test_kev_and_week_cve_counts_are_supported(sentence: str) -> None:
+    assert _cve_findings(sentence, "number_unsupported") == []
+
+
+def test_epss_threshold_and_count_are_supported() -> None:
+    assert _cve_findings("9 have an EPSS score of 0.1 or more.", "number_unsupported") == []
+
+
+def test_threshold_percent_is_supported() -> None:
+    # A guard: without the block "10%" passes too, since a number ending in
+    # zero matches any allowed percent that rounds to it.
+    assert _cve_findings("Each has a 10% chance or more.", "number_unsupported") == []
+
+
+def test_epss_window_of_30_days_is_supported() -> None:
+    sentence = "EPSS is the chance of exploitation in the next 30 days."
+    assert _cve_findings(sentence, "number_unsupported") == []
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The corpus added 228 domains in the last 30 days.",
+        "Over the past 30 days, 49 CVEs appeared.",
+    ],
+)
+def test_30_days_without_epss_is_still_flagged(sentence: str) -> None:
+    # 30 days is EPSS's window: a sentence that doesn't name EPSS has the
+    # wrong window, even when the brief_input row has the block.
+    assert _unsupported(_cve_findings(sentence, "number_unsupported")) == ["'30' (day)"]
+
+
+def test_kev_listed_ids_are_known_cves() -> None:
+    assert _cve_findings("CVE-2026-20001 is in CISA KEV.", "cve_unknown") == []
+
+
+def test_kev_complement_is_supported() -> None:
+    # cves - in_kev: 14 - 12.
+    sentence = "Two of this week's 14 CVEs are not in KEV."
+    assert _cve_findings(sentence, "number_unsupported") == []
+
+
+def test_epss_high_not_in_kev_is_supported() -> None:
+    sentence = "1 CVE outside KEV has an EPSS score of 0.1 or more."
+    assert _cve_findings(sentence, "number_unsupported") == []
+
+
+def test_wrong_kev_count_is_still_flagged() -> None:
+    found = _cve_findings("11 of this week's 14 CVEs are in KEV.", "number_unsupported")
+    assert "'11' (cve)" in _unsupported(found)
+
+
+def test_kev_count_is_flagged_when_kev_is_not_loaded() -> None:
+    found = _cve_findings(
+        "12 of this week's 14 CVEs are in CISA's KEV catalog.",
+        "number_unsupported",
+        in_kev=None,
+        epss_high_not_in_kev=None,
+        kev_cves=[],
+    )
+    assert "'12' (cve)" in _unsupported(found)
