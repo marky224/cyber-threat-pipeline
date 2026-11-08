@@ -1707,3 +1707,116 @@ def test_kev_count_is_flagged_when_kev_is_not_loaded() -> None:
         kev_cves=[],
     )
     assert "'12' (cve)" in _unsupported(found)
+
+
+# --------------------------------------------------------------------------
+# Numbers in product names ("Microsoft 365")
+# --------------------------------------------------------------------------
+
+
+def _with_pulse_c(**changes: Any) -> dict[str, Any]:
+    """A copy of SYNTH with pulse C's fields changed."""
+    synth: dict[str, Any] = json.loads(json.dumps(SYNTH))
+    synth["emerging_pulses_7d"][2].update(changes)
+    return synth
+
+
+_M365_NAME = _with_pulse_c(name="Multi-Stage Microsoft 365 Phishing Campaign")
+_M365_TAG = _with_pulse_c(tags=[*SYNTH["emerging_pulses_7d"][2]["tags"], "microsoft 365"])
+_XPULSE = _with_pulse_c(name="Lazarus Targets 7 Countries")
+# The 2026-11-02 headline.
+_M365_HEADLINE = "Multi-stage Microsoft 365 attacks dominate by indicator volume."
+
+
+def _headline_brief(headline: str, *bullets: str, contrast: str = "- Nothing to contrast.") -> str:
+    """``_brief`` with ``headline`` in place of its "A week of routers."."""
+    md = _brief(*bullets, contrast=contrast)
+    assert md.count("A week of routers.") == 1
+    return md.replace("A week of routers.", headline)
+
+
+def _numbers_and_counts(md: str, brief_input: dict[str, Any]) -> tuple[list[str], tuple[int, int]]:
+    """The unsupported numbers ("'365' (noun:attacks)") and (verified, total)."""
+    result = evaluate(md, brief_input)
+    found = [f for f in result.findings if f.check == "number_unsupported"]
+    return _unsupported(found), (result.facts_verified, result.facts_total)
+
+
+@pytest.mark.parametrize(
+    ("brief_input", "md", "counts"),
+    [
+        (_M365_NAME, _headline_brief(_M365_HEADLINE), (1, 1)),
+        (
+            _M365_NAME,
+            _brief(f"A convergence of Microsoft 365 credential-theft operations. (id={ID_C})"),
+            (2, 2),
+        ),
+        (_M365_TAG, _headline_brief(_M365_HEADLINE), (1, 1)),
+        (_M365_NAME, _headline_brief("Multi-stage **Microsoft 365** attacks dominate."), (1, 1)),
+        (_M365_NAME, _brief(contrast="- Microsoft 365 campaigns lead the week."), (1, 1)),
+        (_M365_NAME, _brief(contrast="- Microsoft 365 is the lure."), (1, 1)),
+    ],
+    ids=[
+        "name headline",
+        "name cited bullet",
+        "tag headline",
+        "bold name headline",
+        "campaigns contrast",
+        "no unit contrast",
+    ],
+)
+def test_product_name_number_is_supported(
+    brief_input: dict[str, Any], md: str, counts: tuple[int, int]
+) -> None:
+    # "Microsoft 365" is a name the input holds, not 365 attacks, campaigns or
+    # anything else that follows it.
+    assert _numbers_and_counts(md, brief_input) == ([], counts)
+
+
+def test_product_name_number_counts_as_a_verified_fact() -> None:
+    # The pulse id and 365 are both verified facts: 365 is not skipped.
+    md = _brief(f"Lures copy Microsoft 365 sign-in pages. (id={ID_C})")
+    assert _numbers_and_counts(md, _M365_NAME) == ([], (2, 2))
+
+
+@pytest.mark.parametrize(
+    ("brief_input", "headline", "unsupported"),
+    [
+        (_M365_NAME, "Multi-stage Windows 365 attacks dominate.", "'365' (noun:attacks)"),
+        (_M365_NAME, "Office 2019 documents carry the macro.", "'2019' (noun:documents)"),
+        (SYNTH, _M365_HEADLINE, "'365' (noun:attacks)"),
+    ],
+    ids=["windows 365", "office 2019", "not in the input"],
+)
+def test_product_name_number_invented_is_still_flagged(
+    brief_input: dict[str, Any], headline: str, unsupported: str
+) -> None:
+    # Only a name the input holds counts: an invented one is checked as a count.
+    assert _numbers_and_counts(_headline_brief(headline), brief_input) == ([unsupported], (0, 1))
+
+
+def test_product_name_number_never_after_a_stop_word() -> None:
+    # Pulse B is named "US disrupts tools as 7 govts warn", but "As 7
+    # countries" is a count of countries (B has 4), not a name.
+    md = _brief(f"As 7 countries warned, Flax Typhoon kept probing. (id={ID_B})")
+    assert _numbers_and_counts(md, SYNTH) == (["'7' (country)"], (1, 2))
+
+
+@pytest.mark.parametrize(
+    ("brief_input", "bullet", "unsupported"),
+    [
+        (_XPULSE, f"Routerbot Targets 7 countries. (id={ID_A})", "'7' (country)"),
+        (
+            _M365_NAME,
+            f"Routerbot rides Microsoft 365 operations. (id={ID_A})",
+            "'365' (noun:operations)",
+        ),
+    ],
+    ids=["cross-pulse count", "cross-pulse name"],
+)
+def test_product_name_number_only_from_the_cited_pulses(
+    brief_input: dict[str, Any], bullet: str, unsupported: str
+) -> None:
+    # Pulse C's name holds the pair, but the bullet cites only pulse A (3
+    # countries, no such name or tag).
+    assert _numbers_and_counts(_brief(bullet), brief_input) == ([unsupported], (1, 2))

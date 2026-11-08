@@ -126,7 +126,10 @@ written from (`eval.py`, pure and deterministic). The checks:
   "N+"); the module docstring has the rules. When `brief_input` has the CVE
   block, this week's CVE, KEV and EPSS counts, CVEs minus KEV and the EPSS
   threshold (`0.1`, `10%`) are supported too, and so is 30 days, EPSS's
-  window, in a sentence that names EPSS
+  window, in a sentence that names EPSS; and a number that is part of a
+  product name (`Microsoft 365`) in the name or a tag of a pulse the bullet
+  cites, or of any emerging pulse in the headline and contrast, is supported
+  whatever follows it
 - no trend words ("spiked", "prior week", "shift"): the input has no
   previous-period figures
 
