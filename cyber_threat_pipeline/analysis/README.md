@@ -99,7 +99,9 @@ written from (`eval.py`, pure and deterministic). The checks:
   no `## Emerging threats` heading, the citation check reads every bullet in
   the brief instead of none
 - quoted pulse names in any section, bullet or paragraph (headings and
-  bold-only lines aren't read), and CVE ids, appear in the input. Every
+  bold-only lines aren't read), and CVE ids, appear in the input (a CVE id
+  also counts when the CVE block, `cve_exploitation_7d`, lists it as in
+  KEV). Every
   quote must be part of a name or tag of a pulse from the last 7 days, so
   a quoted country, tag or industry that no such pulse's name or tag
   contains counts as a failed fact. Trailing `, . ; : ! ?` and spaces
@@ -121,7 +123,10 @@ written from (`eval.py`, pure and deterministic). The checks:
   inside a quote
 - every number is supported for its unit by the pulses its bullet cites
   (CVEs, countries, indicators, governments, pulses, percentages, "about N",
-  "N+"); the module docstring has the rules
+  "N+"); the module docstring has the rules. When `brief_input` has the CVE
+  block, this week's CVE, KEV and EPSS counts, CVEs minus KEV and the EPSS
+  threshold (`0.1`, `10%`) are supported too, and so is 30 days, EPSS's
+  window, in a sentence that names EPSS
 - no trend words ("spiked", "prior week", "shift"): the input has no
   previous-period figures
 

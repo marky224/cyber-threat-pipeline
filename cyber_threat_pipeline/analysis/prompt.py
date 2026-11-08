@@ -9,10 +9,13 @@ prompt variation is not.
 
 from __future__ import annotations
 
+import re
 import textwrap
 from typing import Any
 
 import psycopg
+
+from cyber_threat_pipeline.enrichment import CVE_ID_PATTERN
 
 # Column order returned by ``fetch_brief_input``. Kept as a tuple so the row
 # unpacking stays positional + matches the dbt mart contract (spec 03 §7.9).
@@ -25,7 +28,10 @@ _BRIEF_COLUMNS = (
     "top_industries",
     "emerging_pulses_7d",
     "emerging_indicators_7d",
+    "cve_exploitation_7d",
 )
+
+_ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
 def fetch_brief_input(conn: psycopg.Connection) -> dict[str, Any]:
@@ -38,7 +44,8 @@ def fetch_brief_input(conn: psycopg.Connection) -> dict[str, Any]:
         cur.execute(
             """
             select generated_at, corpus_header, top_types, top_countries,
-                   top_tags, top_industries, emerging_pulses_7d, emerging_indicators_7d
+                   top_tags, top_industries, emerging_pulses_7d, emerging_indicators_7d,
+                   cve_exploitation_7d
             from marts.brief_input
             """
         )
@@ -71,6 +78,79 @@ def _fmt_emerging_pulses(pulses: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _count(v: object) -> int | None:
+    """A count from the CVE block, or None unless it is an int >= 0."""
+    return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
+
+
+def _threshold(v: object) -> float | None:
+    """The EPSS threshold, or None unless it is a number in (0, 1]."""
+    if isinstance(v, bool) or not isinstance(v, int | float) or not 0 < v <= 1:
+        return None
+    return float(v)
+
+
+def _iso_date(v: object) -> str | None:
+    return v if isinstance(v, str) and _ISO_DATE.fullmatch(v) else None
+
+
+def _fmt_cve_exploitation(block: object) -> str | None:
+    """The "Exploited CVEs this week" lines, or None when brief_input has no block.
+
+    The block's values derive from the KEV and EPSS feeds, which are untrusted,
+    so each is checked again here: only int counts >= 0, a threshold in (0, 1],
+    ISO dates and ids matching ``CVE_ID_PATTERN`` render. A value that fails
+    reads "not available" (a date is left out, a bad id dropped). The lines
+    hold no braces or backticks: the writer puts the prompt in a code fence on
+    an Evidence page.
+    """
+    if not isinstance(block, dict):
+        return None
+    lines = ["## Exploited CVEs this week"]
+    cves = _count(block.get("cves"))
+    if cves == 0:
+        return "\n".join([*lines, "No CVE indicators first seen this week."])
+    lines.append(
+        "This week's CVEs (distinct CVE ids with an active indicator first seen in the last"
+        f" 7 days): {'not available this run' if cves is None else cves}"
+    )
+
+    in_kev = _count(block.get("in_kev"))
+    if in_kev is None:
+        lines.append("CISA KEV: not available this run")
+    else:
+        released = _iso_date(block.get("kev_catalog_date"))
+        source = f"KEV, released {released}" if released else "KEV"
+        lines.append(f"In CISA's Known Exploited Vulnerabilities catalog ({source}): {in_kev}")
+        listed = block.get("kev_cves")
+        ids = [
+            c
+            for c in (listed if isinstance(listed, list) else [])
+            if isinstance(c, str) and re.fullmatch(CVE_ID_PATTERN, c)
+        ]
+        if ids:
+            # The row caps the list; a cut list says so, so its length isn't
+            # read as the KEV count.
+            cut = f" (top {len(ids)} by EPSS)" if in_kev > len(ids) else ""
+            lines.append(f"KEV-listed, highest EPSS first{cut}: {', '.join(ids)}")
+
+    epss_high = _count(block.get("epss_high"))
+    threshold = _threshold(block.get("epss_threshold"))
+    if epss_high is None or threshold is None:
+        lines.append("FIRST EPSS: not available this run")
+    else:
+        scored = _iso_date(block.get("epss_score_date"))
+        source = f"; FIRST scores of {scored}" if scored else ""
+        lines.append(
+            f"EPSS of {threshold:g} or more (a {100 * threshold:g}% or higher chance of"
+            f" exploitation in the next 30 days{source}): {epss_high}"
+        )
+        not_in_kev = _count(block.get("epss_high_not_in_kev"))
+        if in_kev is not None and not_in_kev is not None:
+            lines.append(f"EPSS of {threshold:g} or more and not in KEV: {not_in_kev}")
+    return "\n".join(lines)
+
+
 def build_prompt(brief: dict[str, Any]) -> str:
     """Render the prompt string. Pure; deterministic for a given ``brief``."""
     header = brief["corpus_header"]
@@ -84,6 +164,16 @@ def build_prompt(brief: dict[str, Any]) -> str:
     # Indent the block's continuation lines to the template's 8 spaces so the
     # dedent below strips the template indent, not just the common minimum.
     emerging_block = _fmt_emerging_pulses(emerging_pulses).replace("\n", "\n" + " " * 8)
+    # The CVE block and its rule render only when brief_input has the column:
+    # without it (an older row) the prompt is byte-identical to before.
+    cve_block = _fmt_cve_exploitation(brief.get("cve_exploitation_7d"))
+    cve_section = kev_rule = ""
+    if cve_block is not None:
+        cve_section = "\n\n" + " " * 8 + cve_block.replace("\n", "\n" + " " * 8)
+        kev_rule = (
+            "\n        - Call a CVE known exploited only if the KEV list above names it, and give"
+            "\n          the KEV count from its line, not the length of the list."
+        )
 
     body = textwrap.dedent(f"""\
         You are a threat-intelligence analyst. Produce a concise brief on the current
@@ -103,7 +193,7 @@ def build_prompt(brief: dict[str, Any]) -> str:
         ## Emerging in the last 7 days
         Indicator types newly seen:     {_fmt_list(emerging_indicators, "type", "count")}
         New pulses (first_seen_at within 7d):
-        {emerging_block}
+        {emerging_block}{cve_section}
 
         ## What to produce
         Write a brief of 250-400 words, headings included; never more than 400.
@@ -127,7 +217,7 @@ def build_prompt(brief: dict[str, Any]) -> str:
         - Copy every number from the data above, or count items you name in the same
           sentence. Do not add up counts across pulses, and do not group countries
           into regions unless you list them.
-        - When you quote a pulse name, copy it exactly.
+        - When you quote a pulse name, copy it exactly.{kev_rule}
         - If the data can't support a point, say "not in the data" instead of estimating.
         """)
     return body.strip()

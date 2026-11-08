@@ -125,7 +125,7 @@ Every model has schema tests (`not_null`, `unique`, `relationships`) and selecte
 
 ### Reporting — Evidence.dev (`reporting/`)
 
-Evidence v40, Node 24 LTS (pinned in `reporting/.nvmrc`). Three pages today: home (corpus overview), analyst brief (the LLM output), freshness & data quality.
+Evidence v40, Node 24 LTS (pinned in `reporting/.nvmrc`). Four pages today: home (corpus overview), analyst brief (the LLM output), freshness & data quality, exploited CVEs (the corpus's CVE ids against CISA KEV and FIRST EPSS).
 
 Datasource configuration is intentionally minimal: a single `EVIDENCE_SOURCE__neon__connectionString` env var holds the full Postgres URL. (Per-field env vars cause type-coercion bugs in the postgres adapter — strings can't be cast to ports/booleans cleanly. A connection string sidesteps that.)
 
