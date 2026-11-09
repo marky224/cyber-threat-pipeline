@@ -1,6 +1,6 @@
 """Orchestrator — composes config + run lifecycle + extract + transform + load.
 
-Spec: _private/specs/02-ingestion.md §9.
+Spec: phase 02 §9.
 Entrypoint: ``python -m cyber_threat_pipeline.ingestion``  (wired via Makefile ``ingest``).
 """
 

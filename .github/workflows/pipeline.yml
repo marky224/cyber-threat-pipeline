@@ -6,7 +6,7 @@ name: pipeline
 # Per the locked decisions, this workflow IS the orchestration. Stages
 # invoke the top-level Makefile (single source of truth). Auth to AWS is
 # OIDC-only; the deploy IAM role + GitHub OIDC provider are Terraformed in
-# infra/ — see _private/specs/05-reporting-evidence.md and 07-orchestration.md.
+# infra/ — see the phase 05 and 07 specs.
 #
 # Phase-status legend mirrors the Makefile:
 #   [ready]    runs today.
@@ -85,7 +85,7 @@ jobs:
       # -------------------------------------------------------------------
       # AWS auth — OIDC, no static keys.
       # The role-to-assume ARN comes from the deploy role Terraformed in
-      # infra/ (see _private/specs/05-reporting-evidence.md). Trust policy
+      # infra/ (see the phase 05 spec). Trust policy
       # is scoped to this repo + main branch (and workflow_dispatch).
       # -------------------------------------------------------------------
       - name: Configure AWS credentials (OIDC)
@@ -200,7 +200,7 @@ jobs:
       # failed ingest) leaves no file, so the step is skipped rather than
       # adding a second, misleading error. The job still fails; analysis and
       # report stay skipped.
-      # Spec: 07-orchestration.md §3.
+      # Spec: phase 07 §3.
       # -------------------------------------------------------------------
       - name: Record dbt test results
         if: ${{ success() || (failure() && hashFiles('transform/target/run_results.json') != '') }}

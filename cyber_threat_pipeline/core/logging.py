@@ -1,6 +1,6 @@
 """Structured JSON logging — stdout only.
 
-Spec: _private/specs/02-ingestion.md §10.
+Spec: phase 02 §10.
 """
 
 from __future__ import annotations

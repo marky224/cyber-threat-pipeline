@@ -8,7 +8,7 @@ enrichment  CISA KEV catalog + FIRST EPSS scores for the corpus's CVE ids into N
             (bounded downloads, validated whole, warn-only).
 analysis    Post-dbt LLM analyst brief (Grok + Claude side-by-side).
 
-The build-grade specs in ``_private/specs/`` govern each subpackage.
+The private build-grade phase specs govern each subpackage.
 """
 
 __version__ = "0.1.0"

@@ -1,6 +1,6 @@
 """pipeline.runs lifecycle: stale sweep + run() context manager + RunHandle.
 
-Spec: _private/specs/02-ingestion.md §8. ``python -m cyber_threat_pipeline.core.runs``
+Spec: phase 02 §8. ``python -m cyber_threat_pipeline.core.runs``
 is ``make record-dbt`` (spec 07 §3).
 """
 
@@ -119,7 +119,7 @@ class RunHandle:
 def latest_run_id(conn: psycopg.Connection) -> int | None:
     """Return the id of the most-recent pipeline.runs row by started_at.
 
-    Spec: 07-orchestration.md §3. Used by the orchestrator's post-dbt-build
+    Spec: phase 07 §3. Used by the orchestrator's post-dbt-build
     step to find the run row to write dbt_tests_* counters into.
 
     Status-agnostic on purpose: the ingest stage's run() context manager
@@ -153,7 +153,7 @@ def record_dbt_results(
 ) -> tuple[int, int, int, int]:
     """Parse dbt's target/run_results.json and write the test counts into pipeline.runs.
 
-    Spec: 07-orchestration.md §3 + 03-dbt-transform.md §9. Counts nodes whose
+    Spec: phase 07 §3 + phase 03 §9. Counts nodes whose
     unique_id starts with "test." (data tests + custom singular tests) or
     "unit_test." (dbt ≥1.8 unit tests); each is counted in exactly one of
     passed / failed / skipped / warned buckets:
@@ -205,7 +205,7 @@ def record_dbt_results(
 def main(results_path: str = "transform/target/run_results.json") -> None:
     """``make record-dbt``: write dbt test counts into the latest pipeline.runs row.
 
-    Spec: 07-orchestration.md §3. Reads NEON_DATABASE_URL straight from the
+    Spec: phase 07 §3. Reads NEON_DATABASE_URL straight from the
     environment (not Settings(), which would also demand OTX_API_KEY), so CI
     needs only that one secret. Exits non-zero if no row exists — that means
     ingest never opened one, a real upstream failure we don't want to mask.

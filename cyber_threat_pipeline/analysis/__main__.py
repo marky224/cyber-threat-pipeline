@@ -1,6 +1,6 @@
 """Analyst-brief orchestrator: prompt → providers → markdown.
 
-Spec: _private/specs/04-analysis-llm.md §6, extended to N swappable providers.
+Spec: phase 04 §6, extended to N swappable providers.
 
 Steps:
   1. Resolve the configured provider list from Settings.provider_slots()

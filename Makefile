@@ -7,7 +7,7 @@
 #   [ready]  — works today, exercised by CI.
 #   [phaseN] — wired but depends on code that lands in build phase N.
 #              The target will fail with a clear error until that phase
-#              ships; the matching spec lives in _private/specs/.
+#              ships; the matching phase spec is private.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -72,7 +72,7 @@ precommit:
 # Pipeline stages
 # ---------------------------------------------------------------------------
 
-# [phase 2] Ingestion — spec: _private/specs/02-ingestion.md
+# [phase 2] Ingestion — spec: phase 02
 # Reads NEON_DATABASE_URL + OTX_API_KEY from the environment.
 .PHONY: ingest
 ingest:
@@ -89,7 +89,7 @@ enrich:
 	@: "$${NEON_DATABASE_URL:?NEON_DATABASE_URL is required}"
 	uv run python -m cyber_threat_pipeline.enrichment
 
-# [phase 3] Transform — spec: _private/specs/03-dbt-transform.md
+# [phase 3] Transform — spec: phase 03
 # dbt lives in its own isolated env under transform/ (own pyproject + venv).
 # The transform/ directory's Makefile-or-uv project owns the dbt invocation;
 # this top-level target shells out to it so the contract stays one command.
@@ -97,7 +97,7 @@ enrich:
 transform:
 	$(MAKE) -C transform build
 
-# [phase 7] Record dbt test counts — spec: _private/specs/07-orchestration.md §3
+# [phase 7] Record dbt test counts — spec: phase 07 §3
 # Writes dbt_tests_passed/failed/skipped/warned from transform/target/run_results.json
 # into the latest pipeline.runs row. Reads NEON_DATABASE_URL from the
 # environment (not .env). CI also runs this after a failed dbt build when
@@ -107,14 +107,14 @@ record-dbt:
 	@: "$${NEON_DATABASE_URL:?NEON_DATABASE_URL is required}"
 	uv run python -m cyber_threat_pipeline.core.runs
 
-# [phase 4] Analyst brief — spec: _private/specs/04-analysis-llm.md
+# [phase 4] Analyst brief — spec: phase 04
 # Reads NEON_DATABASE_URL + ANTHROPIC_API_KEY + XAI_API_KEY.
 # Writes markdown into reporting/pages/.
 .PHONY: analysis
 analysis:
 	uv run python -m cyber_threat_pipeline.analysis
 
-# [phase 5] Reporting + deploy — spec: _private/specs/05-reporting-evidence.md
+# [phase 5] Reporting + deploy — spec: phase 05
 # Evidence is a Node project; build is `npm run build` inside reporting/.
 # Deploy is `aws s3 sync` + CloudFront invalidation (creds via OIDC in CI;
 # AWS_PROFILE locally).

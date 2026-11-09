@@ -1,6 +1,6 @@
 """xAI (Grok) provider wrapper. Cloud surface — ships in code for production.
 
-Spec: _private/specs/04-analysis-llm.md §4.2.
+Spec: phase 04 §4.2.
 
 The model id is **pinned in code** as ``grok-4`` (overridable via the
 ``GROK_MODEL`` env var). It is forwarded explicitly in every request body

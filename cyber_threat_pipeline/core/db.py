@@ -1,6 +1,6 @@
 """Postgres connection helper.
 
-Spec: _private/specs/02-ingestion.md §1 lists this module; the batched-upsert
+Spec: phase 02 §1 lists this module; the batched-upsert
 machinery lives in ``ingestion/load.py`` where it's used.
 """
 

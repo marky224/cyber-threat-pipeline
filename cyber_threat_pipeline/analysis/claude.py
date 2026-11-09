@@ -1,6 +1,6 @@
 """Anthropic (Claude) provider wrapper. Cloud surface — ships in code for production.
 
-Spec: _private/specs/04-analysis-llm.md §4.1.
+Spec: phase 04 §4.1.
 
 The model id is **pinned in code** as ``claude-sonnet-4-6`` (overridable
 via the ``CLAUDE_MODEL`` env var). It is forwarded explicitly to the

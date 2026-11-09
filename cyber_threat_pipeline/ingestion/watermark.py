@@ -1,6 +1,6 @@
 """pipeline.state watermark read / write / force-cold-start.
 
-Spec: _private/specs/02-ingestion.md §7.
+Spec: phase 02 §7.
 """
 
 from __future__ import annotations

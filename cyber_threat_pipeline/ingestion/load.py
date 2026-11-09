@@ -1,6 +1,6 @@
 """Batched idempotent upsert into raw.pulses + raw.indicators.
 
-Spec: _private/specs/02-ingestion.md §6.
+Spec: phase 02 §6.
 """
 
 from __future__ import annotations
