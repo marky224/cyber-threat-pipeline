@@ -1,6 +1,6 @@
 """OTX extract — cold-start and incremental, with 429 / 5xx retry.
 
-Spec: _private/specs/02-ingestion.md §4.
+Spec: phase 02 §4.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Render the analyst brief to markdown for Evidence to consume.
 
-Spec: _private/specs/04-analysis-llm.md §5, extended to N providers.
+Spec: phase 04 §5, extended to N providers.
 
 The page accepts an arbitrary number of provider results; the writer:
   - dedupes by (provider, model) so two slots pointing at the same local

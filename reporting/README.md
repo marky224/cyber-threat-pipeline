@@ -9,7 +9,7 @@ The public face of the project. Four pages, baked weekly from the marts:
 | Analyst Brief | `/analyst-brief` | `pages/analyst-brief.md` (written by `cyber_threat_pipeline/analysis` — **do not hand-edit**) |
 | Exploited CVEs | `/cves` | `pages/cves.md` |
 
-Spec: `_private/specs/05-reporting-evidence.md`.
+Spec: the phase 05 spec (private).
 
 ## Stack
 
@@ -32,7 +32,7 @@ and is captured in `package-lock.json` for reproducible CI installs (`npm ci`).
 `.npmrc` keeps `engine-strict=true` so `nvm use` actually matters.
 
 For a hermetic dry-run against a throwaway database (no Neon needed), see
-`_private/handoffs/05-reporting-evidence-build.md` — docker postgres + `sql/`
+the phase 05 build handoff (private) — docker postgres + `sql/`
 DDL + `scripts.seed_fixture_corpus` + `make -C transform build` gives you a
 populated `marts.*` in seconds.
 

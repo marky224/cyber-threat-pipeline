@@ -1,6 +1,6 @@
 """OTX pulse dicts → row tuples ready for the load layer. Pure functions, no I/O.
 
-Spec: _private/specs/02-ingestion.md §5.
+Spec: phase 02 §5.
 """
 
 from __future__ import annotations

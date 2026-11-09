@@ -15,7 +15,7 @@ classifiers = [
 ]
 # Runtime dependencies are intentionally empty here.
 # Per the locked decisions, they are added per phase via `uv add`, owned by
-# the matching spec in _private/specs/. dbt has its own isolated env under
+# the matching phase spec. dbt has its own isolated env under
 # transform/; Evidence (reporting/) is a Node project.
 dependencies = [
     "anthropic>=0.104.1",

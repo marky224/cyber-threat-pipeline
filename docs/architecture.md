@@ -201,4 +201,4 @@ Any stage failure writes a `failed` row to `pipeline.runs` and trips the `ctp-ru
 
 ## Why this shape
 
-The narrative answers to "why like this, not differently" live in the [Key engineering decisions](../README.md#key-engineering-decisions) section of the README. The seven phase specs that govern each component are private (in `_private/specs/`, not shipped); each subdirectory of this repo has a focused README that documents its own conventions.
+The narrative answers to "why like this, not differently" live in the [Key engineering decisions](../README.md#key-engineering-decisions) section of the README. The seven phase specs that govern each component are private (not shipped); each subdirectory of this repo has a focused README that documents its own conventions.

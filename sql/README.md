@@ -34,4 +34,4 @@ missing sources.
    CREATE USER grafana_login WITH PASSWORD '<paste-secret>' IN ROLE grafana_ro;
    ```
    Store `grafana_login`'s password in Grafana Cloud's data-source config.
-   See `_private/specs/runbook.md` for details.
+   See the runbook (private) for details.

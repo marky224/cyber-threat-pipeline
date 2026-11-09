@@ -1,6 +1,6 @@
 """Build the analyst-brief prompt deterministically from the brief_input mart row.
 
-Spec: _private/specs/04-analysis-llm.md §3.
+Spec: phase 04 §3.
 
 The exact same prompt string is sent to every configured provider — that's the
 whole point of the side-by-side artifact. Interpretation is the comparison axis;

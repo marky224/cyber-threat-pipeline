@@ -14,7 +14,7 @@ pipeline.brief_evals                          │
                                       operator + public-share URL
 ```
 
-Spec: `_private/specs/06-monitoring-grafana.md`. Read it for the
+Spec: the phase 06 spec (private). Read it for the
 canonical SQL, alert semantics, and the eight acceptance criteria.
 
 ## Files

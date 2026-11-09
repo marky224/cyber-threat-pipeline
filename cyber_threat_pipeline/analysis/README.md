@@ -158,5 +158,5 @@ table, is logged and the page still publishes.
 
 ## Spec
 
-Authoritative: `_private/specs/04-analysis-llm.md`. If anything here
+Authoritative: the phase 04 spec (private). If anything here
 contradicts the spec, the spec wins.

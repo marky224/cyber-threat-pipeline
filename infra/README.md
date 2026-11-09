@@ -15,7 +15,7 @@ GitHub Actions ── OIDC ── deploy IAM role
     └── aws s3 sync + cloudfront create-invalidation
 ```
 
-Spec: `_private/specs/05-reporting-evidence.md` Part B. The stack is
+Spec: the phase 05 spec (private), Part B. The stack is
 modeled on `github.com/marky224/cloudwatch-monitor`'s `status-page.tf`
 pattern, minus the Lambda/EventBridge canary subsystem, plus a GitHub
 OIDC provider + deploy role (cloudwatch-monitor runs Terraform locally

@@ -1,6 +1,6 @@
 """Pipeline configuration — env-var-driven typed settings.
 
-Spec: _private/specs/02-ingestion.md §3.
+Spec: phase 02 §3.
 """
 
 from __future__ import annotations
