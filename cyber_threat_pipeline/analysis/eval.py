@@ -163,7 +163,15 @@ Number rules (``number_unsupported``):
   accepts 300-399, but "38+" rejects 31 and 49. "about/around/roughly/nearly/
   approximately/~ N", or N ending in zeros, match when v rounded to N's
   trailing zeros equals N ("about 25,000" accepts 25,215). A range matches when
-  both ends do.
+  both ends do. A number that is part of a product name in the input matches
+  too, and counts as a verified fact: a plain integer, not read as
+  approximate, right after a word that starts with a capital letter and is not
+  a stop word ("As", "Of", "Over", ...), when that word and number (case
+  aside, any whitespace between) appear in the name or a tag of a pulse the
+  block cites, or of any emerging pulse when the block cites none. "Microsoft
+  365 attacks" passes when such a pulse is named "... Microsoft 365 ..." or
+  tagged "microsoft 365", whatever unit follows; an invented "Windows 365" or
+  "Office 2019 documents" is still checked as a count.
 """
 
 from __future__ import annotations
@@ -242,6 +250,11 @@ _NUMBER = re.compile(
     rf"(?:\s*(?:\u2013|-|to)\s*({_NUM})(%)?)?"
     r"(?!\w|\.\w)"
 )
+# A product name's number ("Microsoft 365"): a capitalised word, whitespace, a
+# digit run. In the brief it is read right before the number; in a pulse name or
+# tag every such pair is collected (case aside).
+_NAME_BEFORE = re.compile(r"(?<![\w'\u2019])([A-Z][A-Za-z]*)\s+$")
+_NAME_NUMBER = re.compile(r"(?<![\w'\u2019])([A-Za-z]+)\s+(\d+)(?!\w|\.\w|,\d)")
 _UNITS_1_9 = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 _TEENS = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen"]
 _TEENS += ["sixteen", "seventeen", "eighteen", "nineteen"]
@@ -744,11 +757,15 @@ def _check_comparisons(blocks: list[_Block]) -> list[Finding]:
 def _check_numbers(
     blocks: list[_Block], pulses: list[_Pulse], globals_: dict[str, set[float]]
 ) -> _Check:
+    every = _name_numbers(pulses)
     checked, found = 0, []
     for b in blocks:
+        names = _name_numbers(b.cited) if b.cited else every
         for s in _sentences(b.text):
             for n in _numbers(s):
                 checked += 1
+                if _in_a_name(n, s, names):
+                    continue  # part of a product name the input holds: verified
                 allowed = _allowed(n, s, b.cited, pulses, globals_)
                 ends = [n.low] if n.high is None else [n.low, n.high]
                 if not all(_matches(v, n, allowed) for v in ends):
@@ -761,6 +778,32 @@ def _check_numbers(
                         )
                     )
     return checked, found
+
+
+def _name_numbers(pulses: list[_Pulse]) -> frozenset[tuple[str, str]]:
+    """Every "<word> <digits>" pair in these pulses' names and tags."""
+    return frozenset(
+        (m.group(1).lower(), m.group(2))
+        for p in pulses
+        for text in (p.name, *p.tags)
+        for m in _NAME_NUMBER.finditer(text)
+    )
+
+
+def _in_a_name(n: _Number, sentence: str, names: frozenset[tuple[str, str]]) -> bool:
+    """Whether ``n`` is part of a product name the input holds ("Microsoft 365").
+
+    Only a plain integer right after a capitalised word that is not a stop word
+    ("As 7 countries" is a count), and only when ``names`` (the cited pulses' pairs,
+    or every emerging pulse's when the block cites none) holds that word and number.
+    ``n.raw`` keeps any "+", "%", "~" or range, so those never match.
+    """
+    if n.approx:
+        return False
+    m = _NAME_BEFORE.search(_window_before(sentence.replace("**", "  "), n.start))
+    if m is None or m.group(1).lower() in _PHRASE_STOP:
+        return False
+    return (m.group(1).lower(), n.raw) in names
 
 
 def _numbers(text: str) -> list[_Number]:
