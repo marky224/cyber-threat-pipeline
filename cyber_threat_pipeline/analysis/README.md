@@ -121,9 +121,13 @@ written from (`eval.py`, pure and deterministic). The checks:
   unpaired is plain text. A quote is read whole even when it holds an
   abbreviation (`"U.S. Fake Operation Zebra"`): no check ends a sentence
   inside a quote
-- every number is supported for its unit by the pulses its bullet cites
-  (CVEs, countries, indicators, governments, pulses, percentages, "about N",
-  "N+"); the module docstring has the rules. When `brief_input` has the CVE
+- every number in any section, bullet or paragraph (headings and bold-only
+  lines aren't read) is supported for its unit (CVEs, countries, indicators,
+  governments, pulses, percentages, "about N", "N+"). Any emerging pulse's
+  indicator count can support an indicator count, or a number with no unit,
+  anywhere; a pulse's CVE and country counts, and counts in its name or
+  tags, only in a bullet or paragraph that cites that pulse. The module
+  docstring has the rules. When `brief_input` has the CVE
   block, this week's CVE, KEV and EPSS counts, CVEs minus KEV and the EPSS
   threshold (`0.1`, `10%`) are supported too, and so is 30 days, EPSS's
   window, in a sentence that names EPSS; and a number that is part of a
