@@ -254,7 +254,7 @@ _NUMBER = re.compile(
 # digit run. In the brief it is read right before the number; in a pulse name or
 # tag every such pair is collected (case aside).
 _NAME_BEFORE = re.compile(r"(?<![\w'\u2019])([A-Z][A-Za-z]*)\s+$")
-_NAME_NUMBER = re.compile(r"(?<![\w'\u2019])([A-Za-z]+)\s+(\d+)(?!\w|\.\w)")
+_NAME_NUMBER = re.compile(r"(?<![\w'\u2019])([A-Za-z]+)\s+(\d+)(?!\w|\.\w|,\d)")
 _UNITS_1_9 = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 _TEENS = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen"]
 _TEENS += ["sixteen", "seventeen", "eighteen", "nineteen"]

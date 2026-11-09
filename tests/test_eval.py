@@ -1724,6 +1724,10 @@ def _with_pulse_c(**changes: Any) -> dict[str, Any]:
 _M365_NAME = _with_pulse_c(name="Multi-Stage Microsoft 365 Phishing Campaign")
 _M365_TAG = _with_pulse_c(tags=[*SYNTH["emerging_pulses_7d"][2]["tags"], "microsoft 365"])
 _XPULSE = _with_pulse_c(name="Lazarus Targets 7 Countries")
+# Pulse B tagged "microsoft 365" too: no longer a unique tag, so a block that
+# names it cites no pulse.
+_M365_SHARED_TAG: dict[str, Any] = json.loads(json.dumps(_M365_TAG))
+_M365_SHARED_TAG["emerging_pulses_7d"][1]["tags"].append("microsoft 365")
 # The 2026-11-02 headline.
 _M365_HEADLINE = "Multi-stage Microsoft 365 attacks dominate by indicator volume."
 
@@ -1752,6 +1756,11 @@ def _numbers_and_counts(md: str, brief_input: dict[str, Any]) -> tuple[list[str]
             (2, 2),
         ),
         (_M365_TAG, _headline_brief(_M365_HEADLINE), (1, 1)),
+        (
+            _M365_SHARED_TAG,
+            _headline_brief("Multi-stage Microsoft 365 attacks dominate."),
+            (1, 1),
+        ),
         (_M365_NAME, _headline_brief("Multi-stage **Microsoft 365** attacks dominate."), (1, 1)),
         (_M365_NAME, _brief(contrast="- Microsoft 365 campaigns lead the week."), (1, 1)),
         (_M365_NAME, _brief(contrast="- Microsoft 365 is the lure."), (1, 1)),
@@ -1760,6 +1769,7 @@ def _numbers_and_counts(md: str, brief_input: dict[str, Any]) -> tuple[list[str]
         "name headline",
         "name cited bullet",
         "tag headline",
+        "shared tag headline",
         "bold name headline",
         "campaigns contrast",
         "no unit contrast",
@@ -1785,8 +1795,14 @@ def test_product_name_number_counts_as_a_verified_fact() -> None:
         (_M365_NAME, "Multi-stage Windows 365 attacks dominate.", "'365' (noun:attacks)"),
         (_M365_NAME, "Office 2019 documents carry the macro.", "'2019' (noun:documents)"),
         (SYNTH, _M365_HEADLINE, "'365' (noun:attacks)"),
+        # The input's digit run is 1,234, not 1.
+        (
+            _with_pulse_c(name="Version 1,234 hosts"),
+            "Version 1 hosts dominate.",
+            "'1' (noun:hosts)",
+        ),
     ],
-    ids=["windows 365", "office 2019", "not in the input"],
+    ids=["windows 365", "office 2019", "not in the input", "thousands comma"],
 )
 def test_product_name_number_invented_is_still_flagged(
     brief_input: dict[str, Any], headline: str, unsupported: str
