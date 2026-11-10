@@ -84,6 +84,14 @@ This is a deliberate departure from the legacy `send_to_llms.py`, which
 silently embedded `"Error from Claude API: ..."` strings as if they were
 the body text. Visible degradation beats fictional completeness.
 
+Claude's output limit is `CLAUDE_MAX_TOKENS` (default 4000, about three
+times a 400-word brief with its citations; the model doesn't see it). The
+scheduled workflow doesn't pass `CLAUDE_MAX_TOKENS`, so production uses the
+code default. Each call logs its stop reason and output tokens. A brief that
+stops at the limit logs a warning and is published as written, so the
+grounding checks report what it lacks (a missing last section shows as
+`section_missing`).
+
 ## Grounding checks
 
 Every brief that came back is checked against the `brief_input` row it was
