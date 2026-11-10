@@ -132,10 +132,10 @@ written from (`eval.py`, pure and deterministic). The checks:
   block, this week's CVE, KEV and EPSS counts, CVEs minus KEV and the EPSS
   threshold (`0.1`, `10%`) are supported too, and so is 30 days, EPSS's
   window, in a sentence that names EPSS; and a number that is part of a
-  product name (`Microsoft 365`) in the name or a tag of a pulse its bullet
-  or paragraph cites (its ids, plus any pulse whose unique tag it names), or
-  of any emerging pulse when it cites none (as a headline or contrast
-  usually does), is supported whatever follows it
+  product name (`Microsoft 365`, `Q3 2026`) in the name or a tag of a pulse
+  its bullet or paragraph cites (its ids, plus any pulse whose unique tag it
+  names), or of any emerging pulse when it cites none (as a headline or
+  contrast usually does), is supported whatever follows it
 - no trend words ("spiked", "prior week", "shift"): the input has no
   previous-period figures
 

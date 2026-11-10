@@ -568,7 +568,13 @@ def test_long_tokens_and_whitespace_runs_stay_fast() -> None:
     # The backward unit look used to scan the whole text before each number,
     # which is quadratic on one long token: about 20 s for a 5,000-character one.
     numbers = " ".join(str(i) for i in range(1, 51))
-    for name in ("A" * 20_000 + " " + numbers, numbers + " " + "A" * 20_000):
+    names = (
+        "A" * 20_000 + " " + numbers,
+        numbers + " " + "A" * 20_000,
+        # A long word that ends in digits, through both product-name regexes.
+        "A" * 20_000 + "1" * 20_000 + " " + numbers,
+    )
+    for name in names:
         synth = json.loads(json.dumps(SYNTH))
         synth["emerging_pulses_7d"][0]["name"] = name
         md = _brief(f"Routerbot probes 2 CVEs. (id={ID_A})", contrast=f"- {name}")
@@ -1730,6 +1736,12 @@ _M365_SHARED_TAG: dict[str, Any] = json.loads(json.dumps(_M365_TAG))
 _M365_SHARED_TAG["emerging_pulses_7d"][1]["tags"].append("microsoft 365")
 # The 2026-11-02 headline.
 _M365_HEADLINE = "Multi-stage Microsoft 365 attacks dominate by indicator volume."
+# The 2026-11-09 brief cited this pulse: a period label ("Q3") before a year.
+_Q3_NAME = _with_pulse_c(name="Email threat landscape: Q3 2026 trends and insights")
+_H1_TAG = _with_pulse_c(tags=[*SYNTH["emerging_pulses_7d"][2]["tags"], "h1 2026"])
+# An ordinal starts with a digit, so "3rd" is never a name's word.
+_ORDINAL_NAME = _with_pulse_c(name="Email threat landscape: 3rd 2026 report")
+_Q3_REPORT = "email threat landscape report"
 
 
 def _headline_brief(headline: str, *bullets: str, contrast: str = "- Nothing to contrast.") -> str:
@@ -1764,6 +1776,14 @@ def _numbers_and_counts(md: str, brief_input: dict[str, Any]) -> tuple[list[str]
         (_M365_NAME, _headline_brief("Multi-stage **Microsoft 365** attacks dominate."), (1, 1)),
         (_M365_NAME, _brief(contrast="- Microsoft 365 campaigns lead the week."), (1, 1)),
         (_M365_NAME, _brief(contrast="- Microsoft 365 is the lure."), (1, 1)),
+        (
+            _Q3_NAME,
+            _brief(f"Phishing kits were reinforced by the Q3 2026 {_Q3_REPORT}. (id={ID_C})"),
+            (2, 2),
+        ),
+        (_Q3_NAME, _headline_brief(f"The Q3 2026 {_Q3_REPORT} leads the week."), (1, 1)),
+        (_Q3_NAME, _headline_brief(f"The **Q3 2026** {_Q3_REPORT} leads the week."), (1, 1)),
+        (_H1_TAG, _brief(contrast="- The H1 2026 campaigns stand apart from the corpus."), (1, 1)),
     ],
     ids=[
         "name headline",
@@ -1773,6 +1793,10 @@ def _numbers_and_counts(md: str, brief_input: dict[str, Any]) -> tuple[list[str]
         "bold name headline",
         "campaigns contrast",
         "no unit contrast",
+        "q3 cited bullet",
+        "q3 headline",
+        "bold q3 headline",
+        "h1 tag contrast",
     ],
 )
 def test_product_name_number_is_supported(
@@ -1801,8 +1825,17 @@ def test_product_name_number_counts_as_a_verified_fact() -> None:
             "Version 1 hosts dominate.",
             "'1' (noun:hosts)",
         ),
+        (_Q3_NAME, f"The Q4 2026 {_Q3_REPORT} leads the week.", "'2026' (pulse)"),
+        (_ORDINAL_NAME, f"The 3rd 2026 {_Q3_REPORT} leads the week.", "'2026' (pulse)"),
     ],
-    ids=["windows 365", "office 2019", "not in the input", "thousands comma"],
+    ids=[
+        "windows 365",
+        "office 2019",
+        "not in the input",
+        "thousands comma",
+        "invented q4",
+        "ordinal",
+    ],
 )
 def test_product_name_number_invented_is_still_flagged(
     brief_input: dict[str, Any], headline: str, unsupported: str
@@ -1827,8 +1860,9 @@ def test_product_name_number_never_after_a_stop_word() -> None:
             f"Routerbot rides Microsoft 365 operations. (id={ID_A})",
             "'365' (noun:operations)",
         ),
+        (_Q3_NAME, f"Routerbot rides the Q3 2026 {_Q3_REPORT}. (id={ID_A})", "'2026' (pulse)"),
     ],
-    ids=["cross-pulse count", "cross-pulse name"],
+    ids=["cross-pulse count", "cross-pulse name", "cross-pulse q3"],
 )
 def test_product_name_number_only_from_the_cited_pulses(
     brief_input: dict[str, Any], bullet: str, unsupported: str
