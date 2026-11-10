@@ -1,5 +1,7 @@
 # Pre-commit hooks. Install with: `uv run pre-commit install`.
 # Run on demand: `uv run pre-commit run --all-files`.
+# The mypy hook's `language: unsupported` was added in pre-commit 4.4.0.
+minimum_pre_commit_version: "4.4.0"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -20,28 +22,20 @@ repos:
         args: ["--fix"]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    # Pin to the same minor as the project's mypy (uv lock → 2.1.0). The
-    # v1.14.1 mirror predates mypy 2.x's import-not-found / import-untyped
-    # error-code split and reports false positives against this codebase.
-    rev: v2.4.0
+  # mypy runs in the project env (`uv run`, as `make typecheck` and CI do), so
+  # it checks against the versions uv.lock pins; a mirror's isolated env
+  # installs its own and drifts. `--frozen` uses uv.lock as is and never
+  # re-locks mid-commit. Needs `uv` on PATH.
+  - repo: local
     hooks:
       - id: mypy
-        # pydantic.mypy plugin is enabled in pyproject.toml; without these
-        # the isolated mypy env can't import the plugin or resolve the
-        # runtime symbols that strict-mode mypy inspects.
-        additional_dependencies:
-          - "pydantic>=2.14.1"
-          - "pydantic-settings>=2.16.2"
-          - "psycopg[binary]>=3.3.6"
-          - "pytest>=9.2.0"
-          - "OTXv2>=1.5.12,<2"
-          - "types-requests"
-          - "anthropic"
-          - "openai"
-        # Mirror the pyproject scope.
+        name: mypy
+        entry: uv run --frozen mypy
+        language: unsupported
+        types_or: [python, pyi]
         files: ^(cyber_threat_pipeline|tests)/
-        args: ["--config-file=pyproject.toml"]
+        # Checks pyproject's whole mypy scope, as CI does, not only the staged files.
+        pass_filenames: false
 
   # GitLeaks — secret scanning. Catches accidental API keys / credentials
   # before they ever reach a commit. CI repeats the scan as a backstop.
