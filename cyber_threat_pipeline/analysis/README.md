@@ -84,6 +84,14 @@ This is a deliberate departure from the legacy `send_to_llms.py`, which
 silently embedded `"Error from Claude API: ..."` strings as if they were
 the body text. Visible degradation beats fictional completeness.
 
+Claude's output limit is `CLAUDE_MAX_TOKENS` (default 4000, about three
+times a 400-word brief with its citations; the model doesn't see it). The
+scheduled workflow doesn't pass `CLAUDE_MAX_TOKENS`, so production uses the
+code default. Each call logs its stop reason and output tokens. A brief that
+stops at the limit logs a warning and is published as written, so the
+grounding checks report what it lacks (a missing last section shows as
+`section_missing`).
+
 ## Grounding checks
 
 Every brief that came back is checked against the `brief_input` row it was
@@ -132,10 +140,10 @@ written from (`eval.py`, pure and deterministic). The checks:
   block, this week's CVE, KEV and EPSS counts, CVEs minus KEV and the EPSS
   threshold (`0.1`, `10%`) are supported too, and so is 30 days, EPSS's
   window, in a sentence that names EPSS; and a number that is part of a
-  product name (`Microsoft 365`) in the name or a tag of a pulse its bullet
-  or paragraph cites (its ids, plus any pulse whose unique tag it names), or
-  of any emerging pulse when it cites none (as a headline or contrast
-  usually does), is supported whatever follows it
+  product name (`Microsoft 365`, `Q3 2026`) in the name or a tag of a pulse
+  its bullet or paragraph cites (its ids, plus any pulse whose unique tag it
+  names), or of any emerging pulse when it cites none (as a headline or
+  contrast usually does), is supported whatever follows it
 - no trend words ("spiked", "prior week", "shift"): the input has no
   previous-period figures
 

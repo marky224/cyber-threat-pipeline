@@ -165,13 +165,15 @@ Number rules (``number_unsupported``):
   trailing zeros equals N ("about 25,000" accepts 25,215). A range matches when
   both ends do. A number that is part of a product name in the input matches
   too, and counts as a verified fact: a plain integer, not read as
-  approximate, right after a word that starts with a capital letter and is not
-  a stop word ("As", "Of", "Over", ...), when that word and number (case
-  aside, any whitespace between) appear in the name or a tag of a pulse the
-  block cites, or of any emerging pulse when the block cites none. "Microsoft
-  365 attacks" passes when such a pulse is named "... Microsoft 365 ..." or
-  tagged "microsoft 365", whatever unit follows; an invented "Windows 365" or
-  "Office 2019 documents" is still checked as a count.
+  approximate, right after a word that is a capital letter, then any letters,
+  then any digits ("Microsoft", "Q3", "FY26"), and not a stop word ("As",
+  "Of", "Over", ...), when that word and number (case aside, any whitespace
+  between) appear in the name or a tag of a pulse the block cites, or of any
+  emerging pulse when the block cites none. "Microsoft 365 attacks" passes
+  when such a pulse is named "... Microsoft 365 ..." or tagged "microsoft
+  365", and "the Q3 2026 report" when it is named "... Q3 2026 ...", whatever
+  unit follows; an invented "Windows 365", "Q4 2026" or "Office 2019
+  documents" is still checked as a count.
 """
 
 from __future__ import annotations
@@ -250,11 +252,11 @@ _NUMBER = re.compile(
     rf"(?:\s*(?:\u2013|-|to)\s*({_NUM})(%)?)?"
     r"(?!\w|\.\w)"
 )
-# A product name's number ("Microsoft 365"): a capitalised word, whitespace, a
-# digit run. In the brief it is read right before the number; in a pulse name or
-# tag every such pair is collected (case aside).
-_NAME_BEFORE = re.compile(r"(?<![\w'\u2019])([A-Z][A-Za-z]*)\s+$")
-_NAME_NUMBER = re.compile(r"(?<![\w'\u2019])([A-Za-z]+)\s+(\d+)(?!\w|\.\w|,\d)")
+# A product name's number ("Microsoft 365", "Q3 2026"): a capitalised word that
+# may end in digits, whitespace, a digit run. In the brief it is read right before
+# the number; in a pulse name or tag every such pair is collected (case aside).
+_NAME_BEFORE = re.compile(r"(?<![\w'\u2019])([A-Z][A-Za-z]*\d*)\s+$")
+_NAME_NUMBER = re.compile(r"(?<![\w'\u2019])([A-Za-z]+\d*)\s+(\d+)(?!\w|\.\w|,\d)")
 _UNITS_1_9 = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 _TEENS = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen"]
 _TEENS += ["sixteen", "seventeen", "eighteen", "nineteen"]
@@ -791,11 +793,12 @@ def _name_numbers(pulses: list[_Pulse]) -> frozenset[tuple[str, str]]:
 
 
 def _in_a_name(n: _Number, sentence: str, names: frozenset[tuple[str, str]]) -> bool:
-    """Whether ``n`` is part of a product name the input holds ("Microsoft 365").
+    """Whether ``n`` is part of a product name the input holds ("Microsoft 365", "Q3 2026").
 
-    Only a plain integer right after a capitalised word that is not a stop word
-    ("As 7 countries" is a count), and only when ``names`` (the cited pulses' pairs,
-    or every emerging pulse's when the block cites none) holds that word and number.
+    Only a plain integer right after a capitalised word, which may end in digits
+    ("Q3"), that is not a stop word ("As 7 countries" is a count), and only when
+    ``names`` (the cited pulses' pairs, or every emerging pulse's when the block
+    cites none) holds that word and number.
     ``n.raw`` keeps any "+", "%", "~" or range, so those never match.
     """
     if n.approx:
