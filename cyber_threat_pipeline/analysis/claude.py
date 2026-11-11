@@ -19,6 +19,11 @@ scheduled workflow doesn't pass ``CLAUDE_MAX_TOKENS``, so production uses this
 default. Each call logs its stop reason and output tokens. A ``max_tokens``
 stop also logs a warning, and the cut text is returned as is: the page
 publishes it and the grounding checks report what it lacks.
+
+The request sends no ``temperature``: anthropic 1.x dropped ``temperature``,
+``top_p`` and ``top_k`` from ``messages.create()``, and Anthropic's migration
+guide for API version 2026-10-21, which anthropic 2.x sends, says that version
+rejects them. Claude samples at the API's default.
 """
 
 from __future__ import annotations
@@ -50,7 +55,6 @@ def query_claude(
     response = client.messages.create(
         model=model,
         max_tokens=max_tokens,
-        temperature=0.3,
         messages=[{"role": "user", "content": prompt}],
     )
     logger.info(

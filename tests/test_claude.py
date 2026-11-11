@@ -14,6 +14,7 @@ import pytest
 from anthropic.types import Message, StopReason, TextBlock, Usage
 
 from cyber_threat_pipeline.analysis import claude
+from tests.conftest import check_create_kwargs
 
 _LOGGER = "cyber_threat_pipeline.analysis.claude"
 
@@ -30,6 +31,7 @@ class _FakeAnthropic:
         return self
 
     def create(self, **kwargs: Any) -> Message:
+        check_create_kwargs(kwargs)
         self.requests.append(kwargs)
         return self.message
 
@@ -86,3 +88,14 @@ def test_claude_warns_when_the_brief_stops_at_max_tokens(
     assert len(warnings) == 1, warnings
     assert "max_tokens (1200)" in warnings[0]
     assert text == cut  # published as written: the grounding checks report what it lacks
+
+
+def test_claude_sends_no_sampling_parameters(monkeypatch: pytest.MonkeyPatch) -> None:
+    # anthropic 1.x dropped temperature, top_p and top_k from messages.create().
+    # Per Anthropic's migration guide, API version 2026-10-21 (which anthropic
+    # 2.x sends) rejects them, even sent in extra_body.
+    fake = _install(monkeypatch, "## Headline\n\nA week of routers.", "end_turn", 900)
+    claude.query_claude("prompt", api_key="k")
+    [request] = fake.requests
+    sent = request.keys() | request.get("extra_body", {}).keys()
+    assert not {"temperature", "top_p", "top_k"} & sent
