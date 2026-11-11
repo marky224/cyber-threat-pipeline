@@ -7,14 +7,16 @@ are skipped if the URL isn't set.
 
 from __future__ import annotations
 
+import inspect
 import os
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import psycopg
 import pytest
+from anthropic.resources import Messages
 from anthropic.types import TextBlock
 
 SQL_DIR = Path(__file__).resolve().parent.parent / "sql"
@@ -75,6 +77,18 @@ def pg_conn(_pg_session: psycopg.Connection) -> Iterator[psycopg.Connection]:
     yield _pg_session
 
 
+# Every keyword the installed SDK's messages.create() takes. The fake clients
+# reject any other with a TypeError, as the real method does, so a keyword the
+# SDK has dropped fails the tests instead of the weekly run.
+_CREATE_KWARGS = frozenset(inspect.signature(Messages.create).parameters) - {"self"}
+
+
+def check_create_kwargs(kwargs: Mapping[str, object]) -> None:
+    """Raise TypeError, as ``Messages.create`` does, for a keyword it doesn't take."""
+    if unknown := sorted(kwargs.keys() - _CREATE_KWARGS):
+        raise TypeError(f"messages.create() got unexpected keyword arguments {unknown}")
+
+
 class FakeJudgeClient:
     """Stands in for ``anthropic.Anthropic`` inside analysis/judge.py. No network.
 
@@ -94,6 +108,7 @@ class FakeJudgeClient:
         return self
 
     def create(self, **kwargs: Any) -> SimpleNamespace:
+        check_create_kwargs(kwargs)
         self.requests.append(kwargs)
         if isinstance(self.reply, Exception):
             raise self.reply

@@ -14,6 +14,7 @@ import pytest
 from anthropic.types import Message, StopReason, TextBlock, Usage
 
 from cyber_threat_pipeline.analysis import claude
+from tests.conftest import check_create_kwargs
 
 _LOGGER = "cyber_threat_pipeline.analysis.claude"
 
@@ -30,6 +31,7 @@ class _FakeAnthropic:
         return self
 
     def create(self, **kwargs: Any) -> Message:
+        check_create_kwargs(kwargs)
         self.requests.append(kwargs)
         return self.message
 
