@@ -31,6 +31,12 @@ adding a `Provider(...)` entry to `providers.py`.
 | `gemini` | `gemini.py` (raw `requests`, Gemini REST `generateContent`) | `GOOGLE_API_KEY` | `GEMINI_MODEL` | `gemini-2.0-flash` |
 | `local` | `local.py` (raw `requests`, OpenAI-compatible — Ollama by default) | `OLLAMA_BASE_URL` (URL, not a key) | `LOCAL_MODEL` | `llama3.1` |
 
+The Claude calls (`claude.py`'s brief and the optional judge) send no
+`temperature`: the anthropic SDK dropped `temperature`, `top_p` and `top_k`
+from `messages.create()` in 1.x, and Anthropic's migration guide for API
+version 2026-10-21, which 2.x sends, says that version rejects them. Claude
+samples at the API's default; the other providers keep `temperature=0.3`.
+
 ## Configuration
 
 `ANALYSIS_PROVIDERS` picks which providers run: a comma-separated list of
@@ -157,10 +163,8 @@ alert (below 90%). Findings are logged as warnings in the job log.
 with a 60 s timeout and no retries) or
 `ANALYSIS_JUDGE=local` (Ollama) adds an optional judge that counts how many of
 the brief's claims the input supports; `JUDGE_MODEL` overrides its model. No
-other judge is accepted. Unset, it's off. The Claude judge sends
-`temperature=0.3`, so a `JUDGE_MODEL` must accept a temperature parameter; the
-default `claude-haiku-4-5` does. A model that rejects it makes the judge log a
-warning and give no score.
+other judge is accepted. Unset, it's off. Like the brief, the Claude judge
+sends no `temperature`.
 
 All of this is warn-only. A crash in the checks or the judge, or a missing
 table, is logged and the page still publishes.

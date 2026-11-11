@@ -100,7 +100,6 @@ def _ask_claude(judge_prompt: str, api_key: str, model: str) -> str:
     response = client.messages.create(
         model=model,
         max_tokens=_MAX_TOKENS,
-        temperature=0.3,
         messages=[{"role": "user", "content": judge_prompt}],
     )
     for block in response.content:

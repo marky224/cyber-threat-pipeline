@@ -55,7 +55,8 @@ def test_claude_judge_uses_haiku_and_counts_supported_claims(fake_judge_client: 
     [request] = fake.requests
     assert request["model"] == "claude-haiku-4-5"
     assert request["max_tokens"] == 4000
-    assert request["temperature"] == 0.3  # same as the writer models in claude.py / local.py
+    sent = request.keys() | request.get("extra_body", {}).keys()
+    assert not {"temperature", "top_p", "top_k"} & sent  # as in test_claude.py
     prompt = request["messages"][0]["content"]
     assert "PROMPT" in prompt and "BRIEF" in prompt
 
