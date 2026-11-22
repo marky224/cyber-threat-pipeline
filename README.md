@@ -71,7 +71,7 @@ Every stage is reproducible locally with the same `make` target — local dev an
 
 ## Security posture
 
-**Least-privilege observability.** Grafana Cloud connects to Neon as `grafana_ro`, scoped strictly to `marts` and `pipeline.runs`. The application role used by ingest, dbt, and the analyst is separate and only runs from inside the GitHub Actions cron.
+**Least-privilege observability.** Grafana Cloud connects to Neon as `grafana_ro`, scoped strictly to `marts` and `pipeline.runs`. The application role used by ingest, dbt, and the analyst brief is separate and only runs from inside the GitHub Actions cron.
 
 **OIDC-only AWS access.** Site deploys assume an IAM role via GitHub's OIDC provider — no long-lived AWS keys in repo secrets. The trust policy is pinned to `ref:refs/heads/main` + `environment:production`, and the OIDC provider itself is a Terraform `data` lookup so the same code works whether the AWS account already has one or not.
 
