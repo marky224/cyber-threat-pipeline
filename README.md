@@ -98,7 +98,7 @@ cyber_threat_pipeline/      Python app package
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
 ├── enrichment/             CISA KEV + FIRST EPSS for the corpus's CVE ids → `raw` · bounded downloads · validated whole · warn-only
 └── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
-sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
+sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro`, `analyst_ro` read-only roles
 transform/                  dbt Core (isolated env) · 11 marts · staging → intermediate → marts · schema + data tests
 reporting/                  Evidence.dev (Node 24 LTS) · 4 pages · postgres datasource via single connection-string env
 monitoring/                 Grafana dashboard (8 panels) + alerts (6 rules) as code · no UI state
