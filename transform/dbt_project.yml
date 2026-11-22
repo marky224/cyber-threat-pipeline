@@ -25,7 +25,7 @@ models:
       +schema: marts
       +materialized: table
       # Re-applied on every dbt build so grafana_ro and analyst_ro survive
-      # drop+recreate materialization churn (Q10). analyst_ro (sql/33) gets
+      # drop+recreate materialization churn. analyst_ro (sql/33) gets
       # SELECT only here, on these mart models, never in staging/intermediate.
       +grants:
         select: ["grafana_ro", "analyst_ro"]
