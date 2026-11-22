@@ -185,12 +185,18 @@ def test_sql33_rerun_on_a_populated_marts_grants_nothing(cur: psycopg.Cursor[Any
     assert cur.fetchall() == []
 
 
-def test_sql33_rerun_revokes_a_stray_default_grant(cur: psycopg.Cursor[Any]) -> None:
+@pytest.mark.parametrize("scope", ["in schema marts", ""], ids=["in_schema_marts", "global"])
+def test_sql33_rerun_revokes_a_stray_default_grant(cur: psycopg.Cursor[Any], scope: str) -> None:
     try:
-        cur.execute("alter default privileges in schema marts grant select on tables to analyst_ro")
+        cur.execute(f"alter default privileges {scope} grant select on tables to analyst_ro")
     finally:
         # The re-run under test is also the cleanup: it leaves the default
         # privileges as the session's own sql/33 run set them.
         cur.execute(_SQL_33.read_text())
+    cur.execute(
+        "select count(*) from pg_default_acl d, aclexplode(d.defaclacl) a"
+        " where a.grantee = 'analyst_ro'::regrole"
+    )
+    assert cur.fetchone() == (0,)
     cur.execute(f"create view {_PROBE_VIEW} as select id from raw.pulses")
     assert _analyst_ro_can_select(cur, _PROBE_VIEW) is False

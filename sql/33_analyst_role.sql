@@ -28,8 +28,10 @@ GRANT USAGE ON SCHEMA marts TO analyst_ro;
 REVOKE ALL ON SCHEMA raw      FROM analyst_ro;
 REVOKE ALL ON SCHEMA pipeline FROM analyst_ro;
 
--- Re-runnable: undoes a stray default grant to analyst_ro in marts.
--- Default privileges persist (pg_default_acl), so a re-run is what cleans
--- one. It covers the default privileges of the role running this file,
--- which is the owner dbt runs as.
+-- Re-runnable: these two lines clear default grants on tables to analyst_ro
+-- that the role running this file set, in marts and globally (no IN SCHEMA).
+-- Run the file as the owner dbt builds as, so they cover the role that
+-- creates the marts; they don't touch defaults set by any other role.
+-- Default privileges persist (pg_default_acl), so a re-run is what cleans one.
 ALTER DEFAULT PRIVILEGES IN SCHEMA marts REVOKE ALL ON TABLES FROM analyst_ro;
+ALTER DEFAULT PRIVILEGES REVOKE ALL ON TABLES FROM analyst_ro;

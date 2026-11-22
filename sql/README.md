@@ -27,10 +27,11 @@ missing sources.
 `33_analyst_role.sql` creates `analyst_ro`, the threat-data analyst's
 read-only role: USAGE on `marts` only, and no USAGE on `raw` or `pipeline`.
 Its SELECT on the 11 mart models comes from dbt's `+grants`, never from a
-schema-wide or default grant; the file's last line revokes any default grant
-to it in `marts`. Apply it before deploying a `transform/dbt_project.yml`
-that names `analyst_ro` in `+grants`, or `dbt build` fails on the grant to a
-missing role.
+schema-wide or default grant. The file's last two lines clear default grants
+on tables to it that the role running the file set, in `marts` and globally,
+so run it as the owner dbt builds as. Apply it before deploying a
+`transform/dbt_project.yml` that names `analyst_ro` in `+grants`, or
+`dbt build` fails on the grant to a missing role.
 
 ## Bootstrapping a new Neon database
 
