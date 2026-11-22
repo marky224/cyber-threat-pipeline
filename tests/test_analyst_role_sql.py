@@ -165,6 +165,26 @@ def test_analyst_ro_cannot_create_anywhere(cur: psycopg.Cursor[Any]) -> None:
             cur.execute(f"create table {schema}.{_CREATE_PROBE} (x int)")
 
 
+def test_sql33_rerun_on_a_populated_marts_grants_nothing(cur: psycopg.Cursor[Any]) -> None:
+    # conftest runs sql/33 while marts is empty; on Neon, marts already holds
+    # every dbt relation when sql/33 is applied. The probes stand in for a dbt
+    # staging view and the incremental stg_otx__indicators, made by the owner
+    # with sql/30's default privileges in force, before the re-run.
+    cur.execute(f"create view {_PROBE_VIEW} as select id from raw.pulses")
+    cur.execute(f"create table {_PROBE_TABLE} as select id from raw.pulses")
+    for probe in (_PROBE_VIEW, _PROBE_TABLE):
+        cur.execute("select has_table_privilege('grafana_ro', %s, 'select')", (probe,))
+        assert cur.fetchone() == (True,), f"sql/30's default privileges didn't reach {probe}"
+    cur.execute(_SQL_33.read_text())
+    assert _analyst_ro_can_select(cur, _PROBE_VIEW) is False
+    assert _analyst_ro_can_select(cur, _PROBE_TABLE) is False
+    cur.execute(
+        "select c.oid::regclass::text from pg_class c, aclexplode(c.relacl) a"
+        " where a.grantee = 'analyst_ro'::regrole"
+    )
+    assert cur.fetchall() == []
+
+
 def test_sql33_rerun_revokes_a_stray_default_grant(cur: psycopg.Cursor[Any]) -> None:
     try:
         cur.execute("alter default privileges in schema marts grant select on tables to analyst_ro")
