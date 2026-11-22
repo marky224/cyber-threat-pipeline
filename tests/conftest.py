@@ -28,6 +28,7 @@ SQL_FILES = (
     "30_grafana_role.sql",
     "31_brief_evals.sql",
     "32_kev_epss.sql",
+    "33_analyst_role.sql",
 )
 
 
