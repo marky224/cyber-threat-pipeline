@@ -25,6 +25,7 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.1",
     "requests>=2.34.2",
+    "sqlglot>=30.21.0",
 ]
 
 [dependency-groups]
