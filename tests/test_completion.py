@@ -9,6 +9,7 @@ replies replace them.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pytest
@@ -96,6 +97,32 @@ def test_complete_claude_passes_no_none_timeout_or_max_retries(
     assert fake.client_kwargs == {"api_key": "k"}
     claude.complete_claude("q", api_key="k", model="m", max_tokens=5, timeout=60, max_retries=0)
     assert fake.client_kwargs == {"api_key": "k", "timeout": 60, "max_retries": 0}
+
+
+def test_query_claude_logs_its_stop_reason_before_failing_on_a_reply_with_no_text(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The brief's log lines say why the call failed: it stopped at max_tokens.
+    fake = _FakeAnthropic(
+        Message(
+            id="msg_test",
+            type="message",
+            role="assistant",
+            model="claude-sonnet-4-6",
+            content=[],
+            stop_reason="max_tokens",
+            stop_sequence=None,
+            usage=Usage(input_tokens=2000, output_tokens=8000),
+        )
+    )
+    monkeypatch.setattr("cyber_threat_pipeline.analysis.claude.anthropic.Anthropic", fake)
+    caplog.set_level(logging.INFO, logger=claude.__name__)
+    with pytest.raises(RuntimeError, match="no text block"):
+        claude.query_claude("q", api_key="k", max_tokens=4000)
+    assert [(r.levelname, r.getMessage()) for r in caplog.records if r.name == claude.__name__] == [
+        ("INFO", "Claude stop_reason=max_tokens: 8000 of 4000 output tokens"),
+        ("WARNING", "Claude stopped at max_tokens (4000): the brief is cut off"),
+    ]
 
 
 # --- xAI ---------------------------------------------------------------------

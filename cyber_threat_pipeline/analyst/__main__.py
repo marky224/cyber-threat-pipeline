@@ -29,6 +29,7 @@ from functools import partial
 from typing import Any
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
 from pydantic import ValidationError
 
 from cyber_threat_pipeline.analysis import providers
@@ -74,8 +75,17 @@ def ask(question: str) -> int:
         max_tokens=MAX_TOKENS,
         temperature=TEMPERATURE,
     )
+    url = cfg.analyst_database_url.get_secret_value()
     try:
-        conn = runner.connect(cfg.analyst_database_url.get_secret_value())
+        conninfo_to_dict(url)
+    except psycopg.Error:
+        # libpq's message quotes the token it can't read, which can be the password.
+        return _setup_error(
+            "cannot connect: ANALYST_DATABASE_URL is not a valid connection URL"
+            " (percent-encode the password's special characters)"
+        )
+    try:
+        conn = runner.connect(url)
     except psycopg.Error as error:
         return _setup_error(f"cannot connect: {str(error).splitlines()[0]}")
     with conn:

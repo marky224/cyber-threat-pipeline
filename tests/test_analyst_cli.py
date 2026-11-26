@@ -18,6 +18,7 @@ import pytest
 from cyber_threat_pipeline.analyst import __main__ as cli
 from cyber_threat_pipeline.analyst import runner
 
+_REAL_CONNECT = runner.connect
 _ANALYST_URL = "postgresql://analyst_login:pw@analyst-host:5432/ctp"
 _OWNER_URL = "postgresql://owner:pw@owner-host:5432/ctp"
 _ESC = "\x1b[2J\x1b]0;pwned\x07"
@@ -177,6 +178,19 @@ def test_a_timeout_says_it_was_cancelled(world: _World, capsys: pytest.CaptureFi
     world.failure = runner.QueryFailed(runner.QUERY_CANCELED, "canceling statement")
     code, out = _ask(capsys)
     assert (code, "Query error: cancelled after 5s" in out) == (1, True)
+
+
+def test_a_malformed_url_never_prints_libpq_s_message(
+    world: _World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # libpq's parse error quotes the token it can't read: here, the password.
+    monkeypatch.setenv("ANALYST_DATABASE_URL", "postgresql://u:s3cr%zzet@127.0.0.1:1/db")
+    monkeypatch.setattr(runner, "connect", _REAL_CONNECT)
+    code, out = _ask(capsys)
+    assert code == 2
+    assert "cannot connect: ANALYST_DATABASE_URL is not a valid connection URL" in out
+    assert "s3cr" not in out
+    assert world.events == []
 
 
 def test_a_refused_session_is_a_setup_error(

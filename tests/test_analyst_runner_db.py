@@ -3,8 +3,8 @@
 Each query here is sent straight to the runner, past the guard, to prove the
 runner's own walls: the extended protocol (one statement), the timeout, the
 READ ONLY transaction, the session check and the cap + 1 stream read. The test
-login and the probe table and sequence are test doubles made in the throwaway
-database; the module drops all three when it ends.
+logins and the probe table and sequence are test doubles made in the throwaway
+database; the module and the tests that make them drop them when they end.
 
 DB-integration (gated on NEON_DATABASE_URL, see conftest.py).
 """
@@ -12,6 +12,7 @@ DB-integration (gated on NEON_DATABASE_URL, see conftest.py).
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import psycopg
@@ -26,6 +27,12 @@ _LOGIN = "analyst_test_login"
 _PASSWORD = "analyst-test-only"
 _PROBE = "marts.analyst_runner_probe"
 _PROBE_SEQ = "marts.analyst_runner_probe_seq"
+# Rows of the stream test: past the cap, _PAD bytes each, up to _ERROR_ROW, where a
+# division by zero waits. _ERROR_ROW x _PAD (200 MB) is far more than the socket
+# buffers between the server and the client hold (a few MB each), so the server
+# reaches that row only if the client keeps reading.
+_PAD = 4_000
+_ERROR_ROW = 50_000
 
 
 @pytest.fixture(scope="module")
@@ -44,6 +51,38 @@ def login_url(_pg_session: psycopg.Connection, pg_url: str) -> Iterator[str]:
         cur.execute(f"drop table if exists {_PROBE}")
         cur.execute(f"drop sequence if exists {_PROBE_SEQ}")
         cur.execute(f"drop role if exists {_LOGIN}")
+
+
+@contextmanager
+def _other_login(
+    session: psycopg.Connection, pg_url: str, name: str, *grants: str
+) -> Iterator[str]:
+    """A LOGIN role made for one test, dropped with whatever it was granted."""
+    cur = session.cursor()
+
+    def drop() -> None:
+        if cur.execute("select 1 from pg_roles where rolname = %s", (name,)).fetchone():
+            cur.execute(f"drop owned by {name}")
+            cur.execute(f"drop role {name}")
+
+    drop()
+    cur.execute(f"create role {name} login password '{_PASSWORD}'")
+    for grant in grants:
+        cur.execute(grant)
+    try:
+        yield make_conninfo(pg_url, user=name, password=_PASSWORD)
+    finally:
+        drop()
+
+
+def _schema_usage(session: psycopg.Connection, name: str) -> tuple[bool, bool, bool]:
+    row = session.execute(
+        "select pg_has_role(%s, 'analyst_ro', 'member'),"
+        " has_schema_privilege(%s, 'raw', 'usage'), has_schema_privilege(%s, 'pipeline', 'usage')",
+        (name, name, name),
+    ).fetchone()
+    assert row is not None
+    return row
 
 
 @pytest.fixture()
@@ -67,6 +106,30 @@ def test_login_session_passes_the_check(login: psycopg.Connection[tuple[Any, ...
 def test_owner_session_is_refused_before_any_query(pg_url: str) -> None:
     with runner.connect(pg_url) as conn, pytest.raises(runner.SessionRefused, match="raw"):
         runner.check_session(conn)
+
+
+def test_a_login_outside_analyst_ro_is_refused(
+    _pg_session: psycopg.Connection, pg_url: str
+) -> None:
+    name = "analyst_test_outsider"
+    with _other_login(_pg_session, pg_url, name) as url, runner.connect(url) as conn:
+        # Not a member, and no USAGE on raw or pipeline: only the member check refuses it.
+        assert _schema_usage(_pg_session, name) == (False, False, False)
+        with pytest.raises(runner.SessionRefused, match=f"^{name} is not a member of analyst_ro$"):
+            runner.check_session(conn)
+
+
+def test_a_login_with_usage_on_pipeline_only_is_refused(
+    _pg_session: psycopg.Connection, pg_url: str
+) -> None:
+    name = "analyst_test_pipeline"
+    grants = (f"grant analyst_ro to {name}", f"grant usage on schema pipeline to {name}")
+    with _other_login(_pg_session, pg_url, name, *grants) as url, runner.connect(url) as conn:
+        assert _schema_usage(_pg_session, name) == (True, False, True)
+        with pytest.raises(
+            runner.SessionRefused, match=f"^{name} can use the raw or pipeline schema$"
+        ):
+            runner.check_session(conn)
 
 
 def test_two_statements_fail_at_the_server(login: psycopg.Connection[tuple[Any, ...]]) -> None:
@@ -112,6 +175,21 @@ def test_a_rendering_with_no_limit_yields_cap_plus_one_rows_and_a_cut_flag(
     assert len(result.rows) == ROW_CAP + 1
     assert result.rows[-1] == (ROW_CAP + 1,)
     assert result.cut
+    _usable(login)
+
+
+def test_the_stream_stops_reading_at_cap_plus_one(
+    login: psycopg.Connection[tuple[Any, ...]],
+) -> None:
+    # A client that read the whole result (execute() then fetchmany) would reach
+    # _ERROR_ROW's division by zero; the stream stops after cap + 1 rows.
+    sql = (
+        f"select g, case when g < {_ERROR_ROW} then repeat('x', {_PAD})"
+        f" else (1 / (g - g))::text end as pad from generate_series(1, {_ERROR_ROW}) g"
+    )
+    result = runner.run(login, sql)
+    assert (len(result.rows), result.cut) == (ROW_CAP + 1, True)
+    assert result.rows[-1][0] == ROW_CAP + 1
     _usable(login)
 
 

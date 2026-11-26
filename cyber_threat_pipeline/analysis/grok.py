@@ -22,7 +22,8 @@ sent, returning the text.
 
 What ``complete_grok`` relies on, read 2026-11-26 in xAI's REST API reference
 for chat completions (docs.x.ai, developers, REST API reference, inference,
-chat completions) and its best-practices page, with no API call:
+chat completions) and its best-practices page (model capabilities, text, best
+practices), with no API call:
 
 - ``usage.prompt_tokens`` (total prompt tokens),
   ``usage.prompt_tokens_details.cached_tokens`` (tokens cached from earlier
@@ -34,15 +35,23 @@ chat completions) and its best-practices page, with no API call:
   ``total = prompt + completion`` bills ``completion``;
   ``total = prompt + completion + reasoning`` bills ``completion + reasoning``;
   any other total, or no usage, leaves every token field ``None`` (unpriced).
-- ``choices[0].finish_reason``: the reference shows ``"stop"``; its legacy
-  completions page defines ``"length"`` as reaching the model's limit or
-  ``max_tokens``.
+- ``choices[0].finish_reason``: the chat-completions reference lists
+  ``"stop"``, ``"length"`` and ``"end_turn"`` (``null`` while streaming), and
+  the same page defines ``"length"`` as reaching the model's maximum token
+  length or the request's ``max_tokens``.
 - ``max_tokens`` is deprecated in favour of ``max_completion_tokens``, which
   bounds only visible output tokens, not reasoning tokens. The body still sends
   ``max_tokens``, as ``query_grok`` always has.
 - ``temperature`` is accepted from 0 to 2 (sampling uses at most 1). The
   best-practices page recommends 0.7 with ``top_p`` 0.95 for its reasoning
   models.
+- The endpoint is legacy. The reference calls Chat Completions "the stateless,
+  OpenAI-compatible predecessor of the Responses API. New integrations should
+  use Responses"; the best-practices page calls it deprecated and "offered only
+  as a legacy endpoint". What that page says the endpoint loses is the model's
+  earlier reasoning in multi-turn and tool-calling conversations. The brief and
+  the threat-data analyst (a new integration) both send one stateless prompt
+  per call, with no tools, and stay on this endpoint.
 """
 
 from __future__ import annotations
