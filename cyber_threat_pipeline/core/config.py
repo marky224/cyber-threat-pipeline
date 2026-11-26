@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
     google_api_key: SecretStr | None = Field(default=None, alias="GOOGLE_API_KEY")
 
+    # The threat-data analyst (`make ask`): its own read-only login, never
+    # NEON_DATABASE_URL, and its own Grok pin, apart from the brief's GROK_MODEL.
+    analyst_database_url: SecretStr | None = Field(default=None, alias="ANALYST_DATABASE_URL")
+    analyst_grok_model: str = Field("grok-4.7", alias="ANALYST_GROK_MODEL")
+
     # Optional brief judge (analysis/judge.py): "claude" (Haiku) or "local"
     # (Ollama). Empty = off. Plain str, not a Literal: a bad value must log a
     # warning, not fail Settings() and with it the publish.

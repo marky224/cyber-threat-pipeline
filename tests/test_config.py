@@ -62,3 +62,20 @@ def test_force_full_backfill_parses_explicit_values(
 ) -> None:
     settings = _build(monkeypatch, FORCE_FULL_BACKFILL=value)
     assert settings.force_full_backfill is expected
+
+
+def test_analyst_settings_default_to_no_url_and_grok_4_7(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANALYST_DATABASE_URL", raising=False)
+    monkeypatch.delenv("ANALYST_GROK_MODEL", raising=False)
+    settings = _build(monkeypatch)
+    assert settings.analyst_database_url is None
+    assert settings.analyst_grok_model == "grok-4.7"
+
+
+def test_analyst_settings_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "postgresql://analyst_login:secret@localhost:5432/db"
+    settings = _build(monkeypatch, ANALYST_DATABASE_URL=url, ANALYST_GROK_MODEL="grok-x")
+    assert settings.analyst_database_url is not None
+    assert settings.analyst_database_url.get_secret_value() == url
+    assert "secret" not in repr(settings)
+    assert settings.analyst_grok_model == "grok-x"
