@@ -23,13 +23,20 @@ All providers conform to `query(prompt, ...) -> str`. Add a new one by
 writing `<name>.py` with a `query_<name>` function + `DEFAULT_MODEL`, then
 adding a `Provider(...)` entry to `providers.py`.
 
+`claude` and `grok` also have `complete_<name>(prompt, ...) -> Completion`
+(`completion.py`), registered as `Provider.complete`: the same request,
+returning the reply's text with its input, cached input, output and reasoning
+tokens. The threat-data analyst (`cyber_threat_pipeline/analyst/`) uses them;
+the brief's `query_<name>` calls are unchanged. `complete_grok` takes the
+temperature: the brief sends 0.3, the analyst 0.
+
 | Name | Module | Credential env var | Default model env var | Default |
 |---|---|---|---|---|
 | `claude` | `claude.py` (anthropic SDK) | `ANTHROPIC_API_KEY` | `CLAUDE_MODEL` | `claude-sonnet-4-6` |
 | `grok` | `grok.py` (raw `requests`, xAI `/v1/chat/completions`) | `XAI_API_KEY` | `GROK_MODEL` | `grok-4` |
 | `gpt` | `gpt.py` (openai SDK) | `OPENAI_API_KEY` | `OPENAI_MODEL` | `gpt-4o` |
 | `gemini` | `gemini.py` (raw `requests`, Gemini REST `generateContent`) | `GOOGLE_API_KEY` | `GEMINI_MODEL` | `gemini-2.0-flash` |
-| `local` | `local.py` (raw `requests`, OpenAI-compatible — Ollama by default) | `OLLAMA_BASE_URL` (URL, not a key) | `LOCAL_MODEL` | `llama3.1` |
+| `local` | `local.py` (raw `requests` to Ollama's native `/api/chat`) | `OLLAMA_BASE_URL` (URL, not a key) | `LOCAL_MODEL` | `llama3.1` |
 
 The Claude calls (`claude.py`'s brief and the optional judge) send no
 `temperature`: the anthropic SDK dropped `temperature`, `top_p` and `top_k`

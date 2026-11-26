@@ -97,7 +97,8 @@ cyber_threat_pipeline/      Python app package
 ├── core/                   Config (pydantic-settings), logging, Neon connection helpers
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
 ├── enrichment/             CISA KEV + FIRST EPSS for the corpus's CVE ids → `raw` · bounded downloads · validated whole · warn-only
-└── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
+├── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
+└── analyst/                Threat-data analyst · `make ask` · one guarded read-only query over the 11 marts · explained answer
 sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro`, `analyst_ro` read-only roles
 transform/                  dbt Core (isolated env) · 11 marts · staging → intermediate → marts · schema + data tests
 reporting/                  Evidence.dev (Node 24 LTS) · 4 pages · postgres datasource via single connection-string env
