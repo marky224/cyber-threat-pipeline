@@ -9,8 +9,10 @@ rights, so none of them is on the list.
 (as ``information_schema.columns`` names it) and meaning, written from the
 models, not generated from dbt docs, since the app env doesn't read
 ``transform/``. It leaves out ``mart_pulse_trends_monthly``'s
-``pulses_first_seen_this_month``, which always equals ``pulse_count``. It holds
-names, types, meanings and the values the code defines, never a data value.
+``pulses_first_seen_this_month``, which always equals ``pulse_count``
+(``CARD_LEAVES_OUT``). It holds names, types, meanings and the values the code
+defines, never a data value. ``make analyst-check`` compares its columns and
+types with ``information_schema.columns`` after every CI dbt build.
 """
 
 from __future__ import annotations
@@ -33,6 +35,12 @@ MART_NAMES: frozenset[str] = frozenset(
         "mart_top_industries",
         "mart_top_pulses",
     }
+)
+
+
+# (mart, column) pairs the database has and the card leaves out.
+CARD_LEAVES_OUT: frozenset[tuple[str, str]] = frozenset(
+    {("mart_pulse_trends_monthly", "pulses_first_seen_this_month")}
 )
 
 

@@ -16,14 +16,18 @@ client-side cursor receives the whole result before ``fetchmany`` slices it, so
 neither is used. No model call happens inside the transaction: the caller makes
 the SQL call before ``run`` and the explanation call after it.
 
+``transaction`` is the same transaction for several reads in one snapshot: the
+eval runs a question's gold query, then the model's, in one ``REPEATABLE READ``
+transaction, so both see the same rows and the same ``now()``.
+
 Statements are never prepared (``prepare_threshold=None``) and every limit is
 ``SET LOCAL``, so the runner works through a transaction-mode pooler.
 """
 
 from __future__ import annotations
 
-from collections.abc import Generator
-from contextlib import closing, suppress
+from collections.abc import Callable, Generator, Iterator
+from contextlib import closing, contextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -102,16 +106,42 @@ def run(
     repeatable_read: bool = False,
 ) -> Result:
     """Run one rendering in a READ ONLY transaction; read at most cap + 1 rows; roll back."""
+    with transaction(conn, cap=cap, repeatable_read=repeatable_read) as read:
+        return read(sql)
+
+
+@contextmanager
+def transaction(
+    conn: psycopg.Connection[tuple[Any, ...]],
+    *,
+    cap: int = ROW_CAP,
+    repeatable_read: bool = False,
+) -> Iterator[Callable[[str], Result]]:
+    """One READ ONLY transaction with its limits; yields a read that runs one rendering.
+
+    Each read sends its rendering by the extended protocol and reads at most
+    cap + 1 rows. The transaction is rolled back when the block ends.
+    """
     isolation = " ISOLATION LEVEL REPEATABLE READ" if repeatable_read else ""
     conn.execute(f"BEGIN{isolation} READ ONLY", prepare=False)
     try:
-        for statement in (
-            f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'",
-            "SET LOCAL search_path = pg_catalog",
-            "SET LOCAL standard_conforming_strings = on",
-        ):
-            conn.execute(statement, prepare=False)
-        rows: list[tuple[Any, ...]] = []
+        try:
+            for statement in (
+                f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'",
+                "SET LOCAL search_path = pg_catalog",
+                "SET LOCAL standard_conforming_strings = on",
+            ):
+                conn.execute(statement, prepare=False)
+        except psycopg.Error as error:
+            raise QueryFailed(error.sqlstate, _message(error)) from None
+        yield lambda sql: _read(conn, sql, cap)
+    finally:
+        _rollback(conn)
+
+
+def _read(conn: psycopg.Connection[tuple[Any, ...]], sql: str, cap: int) -> Result:
+    rows: list[tuple[Any, ...]] = []
+    try:
         with conn.cursor() as cur:
             stream = cast(Generator[tuple[Any, ...], None, None], cur.stream(sql, binary=True))
             with closing(stream):
@@ -122,8 +152,6 @@ def run(
                 columns = tuple(column.name for column in cur.description or ())
     except psycopg.Error as error:
         raise QueryFailed(error.sqlstate, _message(error)) from None
-    finally:
-        _rollback(conn)
     return Result(columns=columns, rows=rows, cut=len(rows) > cap)
 
 

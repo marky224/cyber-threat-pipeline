@@ -75,3 +75,8 @@ def dollars(completion: Completion) -> Decimal | Unpriced:
     cached_price = price.cached_input or Decimal(0)
     cost = (prompt - cached) * price.input + cached * cached_price + output * price.output
     return cost / _MILLION
+
+
+def describe(cost: Decimal | Unpriced) -> str:
+    """One call's cost as text: ``$0.000123``, or ``unpriced (<reason>)``."""
+    return f"unpriced ({cost.reason})" if isinstance(cost, Unpriced) else f"${cost:.6f}"
