@@ -108,10 +108,11 @@ Serverless Postgres (Postgres 17) reached through the pgbouncer-pooled endpoint.
 - `marts` — dbt's output: dimensional and aggregate tables consumed by Evidence and Grafana.
 - `pipeline` — operational tables: `pipeline.state` (watermarks, last-success timestamps) and `pipeline.runs` (one row per stage per run with status, row counts, dbt test outcomes).
 
-Two database roles:
+Three database roles:
 
 - The application role has full DDL/DML on `raw`, `marts`, `pipeline`.
 - `grafana_ro` is read-only and scoped to `marts` + `pipeline.runs`. Grafana Cloud connects only with this role.
+- `analyst_ro` is the threat-data analyst's read-only role, NOLOGIN: SELECT on the 11 mart models only, through dbt `+grants`, and no USAGE on `raw` or `pipeline`. Its login and the analyst CLI arrive in a later change.
 
 ### Transformation — dbt Core (`transform/`)
 

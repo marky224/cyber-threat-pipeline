@@ -71,7 +71,7 @@ Every stage is reproducible locally with the same `make` target — local dev an
 
 ## Security posture
 
-**Least-privilege observability.** Grafana Cloud connects to Neon as `grafana_ro`, scoped strictly to `marts` and `pipeline.runs`. The application role used by ingest, dbt, and the analyst is separate and only runs from inside the GitHub Actions cron.
+**Least-privilege observability.** Grafana Cloud connects to Neon as `grafana_ro`, scoped strictly to `marts` and `pipeline.runs`. The application role used by ingest, dbt, and the analyst brief is separate and only runs from inside the GitHub Actions cron.
 
 **OIDC-only AWS access.** Site deploys assume an IAM role via GitHub's OIDC provider — no long-lived AWS keys in repo secrets. The trust policy is pinned to `ref:refs/heads/main` + `environment:production`, and the OIDC provider itself is a Terraform `data` lookup so the same code works whether the AWS account already has one or not.
 
@@ -98,7 +98,7 @@ cyber_threat_pipeline/      Python app package
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
 ├── enrichment/             CISA KEV + FIRST EPSS for the corpus's CVE ids → `raw` · bounded downloads · validated whole · warn-only
 └── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
-sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro` read-only role
+sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro`, `analyst_ro` read-only roles
 transform/                  dbt Core (isolated env) · 11 marts · staging → intermediate → marts · schema + data tests
 reporting/                  Evidence.dev (Node 24 LTS) · 4 pages · postgres datasource via single connection-string env
 monitoring/                 Grafana dashboard (8 panels) + alerts (6 rules) as code · no UI state
