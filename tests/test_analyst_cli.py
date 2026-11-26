@@ -1,22 +1,30 @@
-"""``python -m cyber_threat_pipeline.analyst ask``: settings, call order, refusals, escaping.
+"""``python -m cyber_threat_pipeline.analyst``: ask, eval and check from the command line.
 
-No network and no database. xAI's replies are hand-written bodies in the shape
-its chat-completions reference documents (a test double, as in
-test_completion.py), served by a fake ``requests.post``. The runner's connect,
-session check and run are fakes that record the order of events.
+``ask``: settings, call order, refusals, escaping and dollars. ``eval`` and
+``check``: setup errors, and which model each provider runs. No network and no
+database. xAI's replies are hand-written bodies in the shape its
+chat-completions reference documents (a test double, as in test_completion.py),
+served by a fake ``requests.post``; Anthropic's are real ``Message`` objects
+from a fake client. The runner's connect, session check and run are fakes that
+record the order of events, and ``evaluate.evaluate`` is a fake in the eval
+tests, which only check what the command line passes it.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
+from anthropic.types import Message, TextBlock, Usage
 
+from cyber_threat_pipeline.analysis.completion import Completion
 from cyber_threat_pipeline.analyst import __main__ as cli
-from cyber_threat_pipeline.analyst import runner
+from cyber_threat_pipeline.analyst import evaluate, runner
+from tests.conftest import check_create_kwargs
 
 _REAL_CONNECT = runner.connect
 _ANALYST_URL = "postgresql://analyst_login:pw@analyst-host:5432/ctp"
@@ -66,6 +74,7 @@ class _World:
         self.events: list[str] = []
         self.urls: list[str] = []
         self.ran: list[str] = []
+        self.bodies: list[dict[str, Any]] = []
 
 
 @pytest.fixture()
@@ -82,6 +91,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[_World]:
 
     def post(url: str, *, json: dict[str, Any], headers: Any, timeout: int) -> _Response:
         w.events.append("llm")
+        w.bodies.append(json)
         assert json["temperature"] == 0
         return _Response(_xai(w.replies.pop(0)))
 
@@ -251,3 +261,152 @@ def test_sqlglot_command_fallback_warning_is_kept_off_the_terminal(
     assert "Refused: not a query: Command" in out
     assert not [r for r in caplog.records if r.name.startswith("sqlglot")]
     assert logging.getLogger("sqlglot").getEffectiveLevel() >= logging.ERROR
+
+
+def test_ask_prints_each_call_s_dollars_and_the_total(
+    world: _World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    world.replies = ["```sql\nselect 1\n```", "One."]
+    code, out = _ask(capsys)
+    assert code == 0
+    # grok-4.7: 10 input tokens at $2 and 5 output tokens at $6, per 1M tokens.
+    assert (
+        "sql: grok-4.7, stop stop, tokens in 10 (cached 0), out 5 (reasoning 0), $0.000050" in out
+    )
+    assert "total: $0.0001" in out
+
+
+def _run(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str]:
+    code = cli.main(list(argv))
+    captured = capsys.readouterr()
+    return code, captured.out + captured.err
+
+
+class _Evaluate:
+    """Stands in for ``evaluate.evaluate``: makes one SQL and one explanation call."""
+
+    def __init__(self) -> None:
+        self.seen: dict[str, Any] = {}
+        self.completions: list[Completion] = []
+
+    def __call__(
+        self,
+        conn: Any,
+        questions: list[Any],
+        *,
+        provider: str,
+        write_sql: Any,
+        explain: Any,
+        judge: Any,
+    ) -> evaluate.EvalRun:
+        self.seen = {"provider": provider, "questions": len(questions), "judge": judge is not None}
+        self.completions = [write_sql(questions[0]), explain("explain this")]
+        at = datetime(2026, 11, 26, 18, 0, tzinfo=UTC)
+        return evaluate.EvalRun(provider, "20261126T180000Z", at, at, (None, None), ())
+
+
+@pytest.fixture()
+def fake_evaluate(world: _World, monkeypatch: pytest.MonkeyPatch) -> _Evaluate:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic")
+    fake = _Evaluate()
+    monkeypatch.setattr(evaluate, "evaluate", fake)
+    return fake
+
+
+def test_eval_runs_grok_at_temperature_0_and_writes_its_reports(
+    world: _World, fake_evaluate: _Evaluate, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    world.replies = ["```sql\nselect 1\n```", "One."]
+    code, out = _run(capsys, "eval")
+    assert code == 0
+    assert fake_evaluate.seen == {"provider": "grok", "questions": 30, "judge": True}
+    assert [body["model"] for body in world.bodies] == ["grok-4.7", "grok-4.7"]
+    assert world.events == ["connect", "check", "llm", "llm"]
+    reports = tmp_path / "analyst-evals"
+    assert sorted(p.name for p in reports.iterdir()) == [
+        "20261126T180000Z-grok.json",
+        "20261126T180000Z-grok.md",
+        "compare.md",
+    ]
+    assert "grok: 0/0 (0.0%), meets the 80% bar: no" in out
+
+
+class _FakeAnthropic:
+    def __init__(self) -> None:
+        self.requests: list[dict[str, Any]] = []
+        self.messages = self
+
+    def __call__(self, **_kwargs: Any) -> _FakeAnthropic:
+        return self
+
+    def create(self, **kwargs: Any) -> Message:
+        check_create_kwargs(kwargs)
+        self.requests.append(kwargs)
+        return Message(
+            id="msg_test",
+            type="message",
+            role="assistant",
+            model=kwargs["model"],
+            content=[TextBlock(type="text", text="```sql\nselect 1\n```")],
+            stop_reason="end_turn",
+            stop_sequence=None,
+            usage=Usage(input_tokens=10, output_tokens=5),
+        )
+
+
+def test_eval_with_claude_runs_the_registry_s_default_model(
+    world: _World,
+    fake_evaluate: _Evaluate,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fake = _FakeAnthropic()
+    monkeypatch.setattr("cyber_threat_pipeline.analysis.claude.anthropic.Anthropic", fake)
+    code, _ = _run(capsys, "eval", "--provider", "claude", "--record", "1")
+    assert code == 0
+    assert fake_evaluate.seen["provider"] == "claude"
+    assert [r["model"] for r in fake.requests] == ["claude-sonnet-4-6", "claude-sonnet-4-6"]
+    assert all(not {"temperature", "top_p", "top_k"} & r.keys() for r in fake.requests)
+    assert "llm" not in world.events  # no Grok call
+
+
+@pytest.mark.parametrize(
+    ("argv", "missing"),
+    [
+        (("eval",), "ANTHROPIC_API_KEY"),
+        (("eval", "--provider", "claude"), "ANTHROPIC_API_KEY"),
+        (("eval",), "ANALYST_DATABASE_URL"),
+        (("eval",), "XAI_API_KEY"),
+    ],
+)
+def test_eval_fails_fast_without_its_url_or_keys(
+    world: _World,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    argv: tuple[str, ...],
+    missing: str,
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic")
+    monkeypatch.delenv(missing)
+    code, out = _run(capsys, *argv)
+    assert (code, f"{missing} is not set" in out) == (2, True)
+    assert world.events == []
+
+
+def test_check_needs_neon_database_url(
+    world: _World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("NEON_DATABASE_URL")
+    code, out = _run(capsys, "check")
+    assert (code, "setup error: NEON_DATABASE_URL is not set" in out) == (2, True)
+    assert world.events == []
+
+
+def test_check_never_prints_libpq_s_message_for_a_malformed_url(
+    world: _World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("NEON_DATABASE_URL", "postgresql://u:s3cr%zzet@127.0.0.1:1/db")
+    monkeypatch.setattr(runner, "connect", _REAL_CONNECT)
+    code, out = _run(capsys, "check")
+    assert code == 2
+    assert "NEON_DATABASE_URL is not a valid connection URL" in out and "s3cr" not in out

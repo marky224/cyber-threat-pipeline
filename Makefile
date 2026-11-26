@@ -38,8 +38,12 @@ help:
 	@echo "    report          [phase 5] build Evidence site + deploy to S3/CloudFront"
 	@echo "    all             ingest → enrich → transform → record-dbt → analysis → report"
 	@echo ""
-	@echo "  Threat-data analyst (phase 8; live, from your machine)"
-	@echo "    ask             answer one question over the marts: make ask Q=\"...\""
+	@echo "  Threat-data analyst (phase 8)"
+	@echo "    ask             [live] answer one question over the marts: make ask Q=\"...\""
+	@echo "    analyst-eval    [live] the gold set through one provider, reports in analyst-evals/:"
+	@echo "                    make analyst-eval [PROVIDER=grok|claude] [RECORD=1]"
+	@echo "    analyst-check   [ready] after dbt build: analyst_ro's grants, the schema card,"
+	@echo "                    the gold queries' renderings, and a gold-echo eval at 100%"
 	@echo ""
 	@echo "  Housekeeping"
 	@echo "    clean           remove caches and build artifacts"
@@ -125,6 +129,22 @@ analysis:
 .PHONY: ask
 ask:
 	uv run python -m cyber_threat_pipeline.analyst ask "$$Q"
+
+# The gold set through one provider (default grok; PROVIDER=claude for the
+# comparison), each explanation graded by Claude Haiku. Reads what `ask` reads,
+# plus ANTHROPIC_API_KEY for the judge. Writes analyst-evals/ (gitignored);
+# RECORD=1 also saves each reply body there.
+.PHONY: analyst-eval
+analyst-eval:
+	uv run python -m cyber_threat_pipeline.analyst eval --provider "$${PROVIDER:-grok}" --record "$${RECORD:-0}"
+
+# Offline, after dbt build: CI's dbt job and local proof on a throwaway
+# postgres:15. Reads NEON_DATABASE_URL (the database's owner) from the
+# environment (not .env), like record-dbt.
+.PHONY: analyst-check
+analyst-check:
+	@: "$${NEON_DATABASE_URL:?NEON_DATABASE_URL is required}"
+	uv run python -m cyber_threat_pipeline.analyst check
 
 # [phase 5] Reporting + deploy — spec: phase 05
 # Evidence is a Node project; build is `npm run build` inside reporting/.
