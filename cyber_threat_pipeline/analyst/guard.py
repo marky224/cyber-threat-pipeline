@@ -30,16 +30,31 @@ The rules, in order:
    ``<name>``, with no catalog part. A CTE named like a mart is refused.
 8. The rendering writes every table as ``marts.<name>`` and caps the outer
    LIMIT (or FETCH FIRST) at ``ROW_CAP + 1``; LIMIT NULL, LIMIT ALL, no limit
-   or a limit that isn't an integer literal becomes ``ROW_CAP + 1``. The
+   or a limit that isn't an integer literal becomes ``ROW_CAP + 1``. FETCH
+   with WITH TIES or PERCENT is refused, since neither keeps a row cap. The
    rendering is then parsed again, must pass rules 1-7 again, and must render
    to the same text. sqlglot rewrites some constructs as it writes them (it
    writes ``date_part``'s unit string back as bare SQL), so the guard checks
    the query as it will run, not only the tree it first read.
+9. sqlglot also rewrites some literals: it reads only the leading number and
+   unit of an interval string (``'1 day 12:00'`` becomes ``'1 DAY'``) and
+   converts to_char formats through its own notation (``'%Y'`` becomes
+   ``'YYYY'``). The guard reads both kinds from the tokens of the model's text
+   and of the rendering, and refuses the query unless they match: interval
+   text ignoring case and whitespace, as Postgres reads it, and to_char formats
+   exactly, since their patterns are case-sensitive.
+
+Postgres reads attribute notation ``t.f`` as the function call ``f(t)``, while
+sqlglot parses it as a column, so the function allow-list doesn't see it. That
+reaches only functions that take one row argument, none of which has a side
+effect; ``t.pg_sleep`` fails as an unknown column, and the role still limits
+what any call can read.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass
 
 import sqlglot
@@ -49,7 +64,7 @@ from sqlglot.errors import SqlglotError
 from sqlglot.expressions.datatypes import DType
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.scope import Scope, traverse_scope
-from sqlglot.tokenizer_core import TokenType
+from sqlglot.tokenizer_core import Token, TokenType
 
 from cyber_threat_pipeline.analyst.schema import MART_NAMES, MART_SCHEMA
 
@@ -285,6 +300,7 @@ def check(text: str) -> Checked | Refusal:
         tables, functions = _inspect(tree)
         rendering = _render(tree, tables)
         _check_stable(rendering)
+        _check_literals(text, rendering)
     except _Refused as refused:
         return Refusal(str(refused))
     except RecursionError:
@@ -342,6 +358,10 @@ def _check_nodes(tree: exp.Expr) -> tuple[str, ...]:
     for node in nodes:
         if isinstance(node, exp.Dot) and isinstance(node.expression, exp.Func):
             raise _Refused("schema-qualified function calls are not allowed")
+        if isinstance(node, exp.LimitOptions) and (
+            node.args.get("with_ties") or node.args.get("percent")
+        ):
+            raise _Refused("FETCH WITH TIES and PERCENT are not allowed")
         if isinstance(node, exp.Anonymous):
             name = node.name.lower()
             if name not in _FUNCTION_NAMES:
@@ -438,6 +458,67 @@ def _check_stable(rendering: str) -> None:
         raise _Refused(f"rendering is not stable: {refused}") from None
     if second != rendering:
         raise _Refused("rendering is not stable")
+
+
+_INTERVAL_FIELDS = frozenset({"year", "month", "day", "hour", "minute", "second"})
+
+
+def _check_literals(text: str, rendering: str) -> None:
+    """Rule 9: the rendering keeps every interval literal and to_char format."""
+    source, rendered = Counter(_literals(text)), Counter(_literals(rendering))
+    changed = (source - rendered) or (rendered - source)
+    if changed:
+        kind, value = min(changed)
+        raise _Refused(f"rendering changes {kind}: {value!r}")
+
+
+def _literals(sql: str) -> list[tuple[str, str]]:
+    """The interval literals and to_char formats in ``sql``, read from its tokens."""
+    tokens = Dialect.get_or_raise(_DIALECT).tokenize(sql)
+    found: list[tuple[str, str]] = []
+    for i, token in enumerate(tokens):
+        following = tokens[i + 1 : i + 3]
+        if (
+            token.token_type is TokenType.INTERVAL
+            and following[:1]
+            and (following[0].token_type is TokenType.STRING)
+        ):
+            value = following[0].text
+            # interval '1' day: the field word belongs to the literal.
+            if len(following) > 1 and following[1].text.lower() in _INTERVAL_FIELDS:
+                value += " " + following[1].text
+            found.append(("an interval literal", " ".join(value.lower().split())))
+        elif (
+            token.text.lower() == "to_char"
+            and following[:1]
+            and (following[0].token_type is TokenType.L_PAREN)
+        ):
+            fmt = _second_argument(tokens, i + 1)
+            if fmt is not None:
+                found.append(("a to_char format", fmt))
+    return found
+
+
+def _second_argument(tokens: list[Token], open_paren: int) -> str | None:
+    """The text of a call's second argument when it is one string token."""
+    depth, argument, current = 0, 0, []
+    for token in tokens[open_paren:]:
+        if token.token_type is TokenType.L_PAREN:
+            depth += 1
+            if depth == 1:
+                continue
+        elif token.token_type is TokenType.R_PAREN:
+            depth -= 1
+            if depth == 0:
+                break
+        elif token.token_type is TokenType.COMMA and depth == 1:
+            argument += 1
+            continue
+        if argument == 1:
+            current.append(token)
+    if len(current) == 1 and current[0].token_type is TokenType.STRING:
+        return current[0].text
+    return None
 
 
 def _first_line(error: SqlglotError) -> str:

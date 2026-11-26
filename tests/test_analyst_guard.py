@@ -616,6 +616,92 @@ def test_outer_limit_is_capped(sql: str, rendering: str) -> None:
     assert _accepted(sql).sql == rendering
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        # WITH TIES returns every row tied with the last, so the count caps nothing.
+        pytest.param(
+            "select g from generate_series(1, 5000) g order by g * 0 fetch first 1 rows with ties",
+            id="with-ties-1",
+        ),
+        pytest.param(
+            "select g from generate_series(1, 5000) g order by g * 0 "
+            "fetch first 5000 rows with ties",
+            id="with-ties-5000",
+        ),
+        pytest.param(
+            "select tag from marts.mart_threat_tags fetch first 5 percent rows only", id="percent"
+        ),
+    ],
+)
+def test_fetch_with_ties_or_percent_is_refused(sql: str) -> None:
+    assert _reason(sql) == "FETCH WITH TIES and PERCENT are not allowed"
+
+
+def test_fetch_rows_only_is_accepted_and_capped() -> None:
+    sql = "select g from generate_series(1, 5000) g order by g fetch first 5 rows only"
+    assert _accepted(sql).sql == (
+        "SELECT g FROM GENERATE_SERIES(1, 5000) AS g ORDER BY g FETCH FIRST 5 ROWS ONLY"
+    )
+
+
+@pytest.mark.parametrize(
+    ("sql", "reason"),
+    [
+        # sqlglot keeps only the leading number and unit: Postgres reads 1 day 12:00:00.
+        pytest.param(
+            "select interval '1 day 12:00'",
+            "rendering changes an interval literal: '1 day 12:00'",
+            id="interval-time-part-dropped",
+        ),
+        # Postgres reads '7 days ago' as -7 days; the rendering says +7 days.
+        pytest.param(
+            "select now() - interval '7 days ago'",
+            "rendering changes an interval literal: '7 days ago'",
+            id="interval-ago-dropped",
+        ),
+        # An error in Postgres; the rendering would run as 1 day.
+        pytest.param(
+            "select interval '1 day x'",
+            "rendering changes an interval literal: '1 day x'",
+            id="interval-bad-text-dropped",
+        ),
+        # Postgres prints '%Y' as '%6'; the rendering would print the year.
+        pytest.param(
+            "select to_char(current_date, '%Y')",
+            "rendering changes a to_char format: '%Y'",
+            id="to_char-format-converted",
+        ),
+    ],
+)
+def test_literal_the_rendering_changes_is_refused(sql: str, reason: str) -> None:
+    assert _reason(sql) == reason
+
+
+@pytest.mark.parametrize(
+    ("sql", "rendering"),
+    [
+        # A change of case alone doesn't count: Postgres reads interval text either way.
+        ("select interval '7 days'", f"SELECT INTERVAL '7 DAYS' {_CAPPED}"),
+        ("select interval '1 day 2 hours'", f"SELECT INTERVAL '1 day 2 hours' {_CAPPED}"),
+        ("select interval '1' day", f"SELECT INTERVAL '1 DAY' {_CAPPED}"),
+        (
+            "select to_char(current_date, 'YYYY-MM')",
+            f"SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM') {_CAPPED}",
+        ),
+    ],
+)
+def test_literal_the_rendering_keeps_is_accepted(sql: str, rendering: str) -> None:
+    assert _accepted(sql).sql == rendering
+
+
+def test_attribute_notation_is_read_as_a_column() -> None:
+    """Postgres runs t.pg_typeof as pg_typeof(t); the guard sees a column (module docstring)."""
+    checked = _accepted("select t.pg_typeof from marts.mart_top_pulses t")
+    assert checked.sql == f"SELECT t.pg_typeof FROM marts.mart_top_pulses AS t {_CAPPED}"
+    assert checked.functions == ()
+
+
 # --- the gold set ---------------------------------------------------------------
 
 
