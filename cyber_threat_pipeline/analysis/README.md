@@ -173,6 +173,12 @@ the brief's claims the input supports; `JUDGE_MODEL` overrides its model. No
 other judge is accepted. Unset, it's off. Like the brief, the Claude judge
 sends no `temperature`.
 
+`judge_answer()` in `judge.py` is the threat-data analyst's judge, not the
+brief's: it grades one explanation of a query's rows for `make analyst-eval`,
+always on Claude Haiku 4.5 with the same bounds and reply format, through
+`complete_claude` so the score comes with the call's tokens. `ANALYSIS_JUDGE`
+and `JUDGE_MODEL` don't change it.
+
 All of this is warn-only. A crash in the checks or the judge, or a missing
 table, is logged and the page still publishes.
 
