@@ -411,6 +411,12 @@ def test_unclosed_comment_is_refused_as_a_parse_error() -> None:
     assert _reason("select 1 /* unclosed ; drop table x").startswith("parse error: ")
 
 
+def test_sql_that_sqlglot_raises_a_plain_error_on_is_refused() -> None:
+    # sqlglot raises ValueError, not a SqlglotError, on this numeric literal.
+    sql = "select round(.100.0 * 2, 1) from marts.mart_cve_enrichment"
+    assert _reason(sql) == "parse error: Invalid numeric literal: '0.100.0'"
+
+
 # --- rule 8: rendering, cap and fixpoint ------------------------------------------
 
 
@@ -672,10 +678,46 @@ def test_fetch_rows_only_is_accepted_and_capped() -> None:
             "rendering changes a to_char format: '%Y'",
             id="to_char-format-converted",
         ),
+        # Postgres cuts '1.5' at the field (1 hour); the rendering's '1.5 HOUR' is 1:30.
+        pytest.param(
+            "select interval '1.5' hour",
+            "rendering changes an interval literal: '1.5'",
+            id="interval-fraction-hour",
+        ),
+        pytest.param(
+            "select interval '0.5' day",
+            "rendering changes an interval literal: '0.5'",
+            id="interval-fraction-day",
+        ),
+        pytest.param(
+            "select interval '1.5' month",
+            "rendering changes an interval literal: '1.5'",
+            id="interval-fraction-month",
+        ),
+        pytest.param(
+            "select interval '-1.5' hour",
+            "rendering changes an interval literal: '-1.5'",
+            id="interval-negative-fraction-hour",
+        ),
     ],
 )
 def test_literal_the_rendering_changes_is_refused(sql: str, reason: str) -> None:
     assert _reason(sql) == reason
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        # sqlglot converts a string anywhere in the format argument ('%Y' to 'YYYY'),
+        # which the token check can't see once the string is nested.
+        pytest.param("select to_char(current_date, ('%Y'))", id="parenthesized"),
+        pytest.param("select to_char(current_date, '%Y'::text)", id="cast-operator"),
+        pytest.param("select to_char(current_date, cast('%Y' as text))", id="cast"),
+        pytest.param("select to_char(current_date, coalesce('%Y', 'x'))", id="coalesce"),
+    ],
+)
+def test_to_char_format_that_is_not_one_string_literal_is_refused(sql: str) -> None:
+    assert _reason(sql) == "to_char format must be one string literal"
 
 
 @pytest.mark.parametrize(
@@ -685,6 +727,7 @@ def test_literal_the_rendering_changes_is_refused(sql: str, reason: str) -> None
         ("select interval '7 days'", f"SELECT INTERVAL '7 DAYS' {_CAPPED}"),
         ("select interval '1 day 2 hours'", f"SELECT INTERVAL '1 day 2 hours' {_CAPPED}"),
         ("select interval '1' day", f"SELECT INTERVAL '1 DAY' {_CAPPED}"),
+        ("select interval '-1' hour", f"SELECT INTERVAL '-1 HOUR' {_CAPPED}"),
         (
             "select to_char(current_date, 'YYYY-MM')",
             f"SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM') {_CAPPED}",

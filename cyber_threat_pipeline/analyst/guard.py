@@ -42,7 +42,13 @@ The rules, in order:
    ``'YYYY'``). The guard reads both kinds from the tokens of the model's text
    and of the rendering, and refuses the query unless they match: interval
    text ignoring case and whitespace, as Postgres reads it, and to_char formats
-   exactly, since their patterns are case-sensitive.
+   exactly, since their patterns are case-sensitive. A field word after an
+   interval string (``interval '1' day``) is read as part of it only when the
+   string is a whole number: Postgres cuts ``interval '1.5' hour`` to 1 hour,
+   while the rendering's ``'1.5 HOUR'`` is 1:30. A to_char format must be one
+   plain string literal, checked on the tree: sqlglot converts strings nested
+   anywhere in that argument (``('%Y')``, ``'%Y'::text``, ``coalesce('%Y', ...)``),
+   where the tokens can't show it.
 
 Postgres reads attribute notation ``t.f`` as the function call ``f(t)``, while
 sqlglot parses it as a column, so the function allow-list doesn't see it. That
@@ -265,6 +271,7 @@ _CAST_TYPES: frozenset[DType] = frozenset(
 )
 
 _INTEGER = re.compile(r"[0-9]+")
+_SIGNED_INTEGER = re.compile(r"[+-]?[0-9]+")
 
 
 @dataclass(frozen=True)
@@ -305,6 +312,10 @@ def check(text: str) -> Checked | Refusal:
         return Refusal(str(refused))
     except RecursionError:
         return Refusal("query is too deeply nested")
+    except Exception as error:
+        # sqlglot raises plain errors (ValueError and others) on some malformed
+        # SQL; whatever it raises, the query is refused, never run.
+        return Refusal(f"parse error: {_first_line(error)}")
     marts = tuple(sorted({table.name for table in tables}))
     return Checked(sql=rendering, marts=marts, functions=functions)
 
@@ -350,7 +361,7 @@ def _check_queries(tree: exp.Expr) -> None:
 
 
 def _check_nodes(tree: exp.Expr) -> tuple[str, ...]:
-    """Rules 4-6: node classes, strings, functions and casts."""
+    """Rules 4-6 (node classes, strings, functions and casts) and rule 9's to_char format."""
     nodes = list(tree.walk())
     if any(isinstance(node, _ESCAPE_STRINGS) for node in nodes):
         raise _Refused("escape strings are not allowed")
@@ -362,6 +373,8 @@ def _check_nodes(tree: exp.Expr) -> tuple[str, ...]:
             node.args.get("with_ties") or node.args.get("percent")
         ):
             raise _Refused("FETCH WITH TIES and PERCENT are not allowed")
+        if isinstance(node, exp.TimeToStr) and not _plain_string(node.args.get("format")):
+            raise _Refused("to_char format must be one string literal")
         if isinstance(node, exp.Anonymous):
             name = node.name.lower()
             if name not in _FUNCTION_NAMES:
@@ -377,6 +390,10 @@ def _check_nodes(tree: exp.Expr) -> tuple[str, ...]:
             kind = "function" if isinstance(node, exp.Func) else "syntax"
             raise _Refused(f"{kind} not allowed: {type(node).__name__}")
     return tuple(sorted(functions))
+
+
+def _plain_string(node: exp.Expr | None) -> bool:
+    return isinstance(node, exp.Literal) and node.is_string
 
 
 def _mart_tables(tree: exp.Expr) -> list[exp.Table]:
@@ -484,8 +501,12 @@ def _literals(sql: str) -> list[tuple[str, str]]:
             and (following[0].token_type is TokenType.STRING)
         ):
             value = following[0].text
-            # interval '1' day: the field word belongs to the literal.
-            if len(following) > 1 and following[1].text.lower() in _INTERVAL_FIELDS:
+            # interval '1' day: the field word belongs to a whole-number literal.
+            if (
+                _SIGNED_INTEGER.fullmatch(value)
+                and len(following) > 1
+                and following[1].text.lower() in _INTERVAL_FIELDS
+            ):
                 value += " " + following[1].text
             found.append(("an interval literal", " ".join(value.lower().split())))
         elif (
@@ -521,6 +542,6 @@ def _second_argument(tokens: list[Token], open_paren: int) -> str | None:
     return None
 
 
-def _first_line(error: SqlglotError) -> str:
+def _first_line(error: Exception) -> str:
     lines = str(error).splitlines()
     return lines[0] if lines else type(error).__name__
