@@ -87,6 +87,13 @@ def test_explanation_prompt_cuts_long_text_and_writes_null() -> None:
     assert "| NULL" in text
 
 
+def test_rows_text_is_the_explanation_prompt_s_rows_part() -> None:
+    rows = [(i, f"tag{i}") for i in range(60)]
+    part = prompt.rows_text(["n", "tag"], rows, cut=False)
+    assert part.startswith("60 rows. The first 50 are shown.\n\nRows:\nn | tag\n")
+    assert prompt.explanation_prompt("Q?", "S", ["n", "tag"], rows, cut=False).endswith(part)
+
+
 def test_explanation_prompt_says_when_the_result_is_cut_or_empty() -> None:
     cut = prompt.explanation_prompt("Q?", "S", ["a"], [(1,)] * 1001, cut=True)
     assert "the result was cut at the row cap" in cut
@@ -102,6 +109,7 @@ def test_explanation_prompt_says_when_the_result_is_cut_or_empty() -> None:
         ("a\rb", "a\\x0db"),
         ("csi\x9bm", "csi\\x9bm"),
         ("rtl‮override", "rtl\\u202eoverride"),
+        ("line\u2028sep\u2029par", "line\\u2028sep\\u2029par"),
         ("two\nlines\tand tab", "two\nlines\tand tab"),
     ],
 )

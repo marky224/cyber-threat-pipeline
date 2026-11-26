@@ -4,13 +4,15 @@ The SQL prompt is one user message: the rules, the schema card, then the
 question last, so the prefix stays the same across questions. It holds no data
 value. Only the explanation prompt holds rows: at most ``EXPLAIN_ROWS``, with
 long text cut at ``TEXT_CUT`` characters, the row count and whether the result
-was cut at the row cap.
+was cut at the row cap. ``rows_text`` is that part, which the eval's judge also
+sees.
 
 A reply must hold exactly one fenced ``sql`` block, or start with
 ``CANNOT_ANSWER`` and a reason; anything else is refused as "no single SQL
-block". ``escape`` writes control and format characters in model-written text
-(and in values, which come from OTX) as visible escapes, so nothing a model or a
-feed wrote can move the terminal's cursor, clear it or retitle it.
+block". ``escape`` writes control and format characters, and the Unicode line
+and paragraph separators, in model-written text (and in values, which come from
+OTX) as visible escapes, so nothing a model or a feed wrote can move the
+terminal's cursor, clear it, retitle it or break a line in a report.
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ at the row cap, say so.
 
 _SQL_BLOCK = re.compile(r"```sql[ \t]*\n(.*?)```", re.DOTALL)
 _KEEP = frozenset("\n\t")
+# Control, format, line separator and paragraph separator characters.
+_ESCAPED_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,13 @@ def explanation_prompt(
     cut: bool,
 ) -> str:
     """The explanation prompt: the question, the SQL, and at most EXPLAIN_ROWS rows."""
+    return f"{_EXPLAIN}\nQuestion: {question}\n\nSQL:\n{sql}\n\n" + rows_text(
+        columns, rows, cut=cut
+    )
+
+
+def rows_text(columns: Sequence[str], rows: Sequence[Sequence[Any]], *, cut: bool) -> str:
+    """The row count, whether the result was cut, and at most EXPLAIN_ROWS rows as a table."""
     if cut:
         count = f"More than {ROW_CAP:,} rows: the result was cut at the row cap."
     elif not rows:
@@ -95,9 +106,7 @@ def explanation_prompt(
     table = "\n".join(" | ".join(_cell(value) for value in row) for row in (columns, *shown))
     if len(rows) > len(shown):
         count += f" The first {len(shown)} are shown."
-    return f"{_EXPLAIN}\nQuestion: {question}\n\nSQL:\n{sql}\n\n{count}\n" + (
-        f"\nRows:\n{table}\n" if rows else ""
-    )
+    return f"{count}\n" + (f"\nRows:\n{table}\n" if rows else "")
 
 
 def _cell(value: Any) -> str:
@@ -109,7 +118,9 @@ def escape(text: str, *, keep_newlines: bool = True) -> str:
     """``text`` with control and format characters written as visible escapes."""
     keep = _KEEP if keep_newlines else frozenset()
     return "".join(
-        char if char in keep or unicodedata.category(char) not in ("Cc", "Cf") else _escaped(char)
+        char
+        if char in keep or unicodedata.category(char) not in _ESCAPED_CATEGORIES
+        else _escaped(char)
         for char in text
     )
 
