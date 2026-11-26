@@ -13,6 +13,12 @@ Off unless ``ANALYSIS_JUDGE`` is set. Only two judges are allowed:
 
 Warn-only, like the deterministic checks in ``eval.py``: ``judge()`` never
 raises, and a missing key, failed call or unreadable reply gives ``None``.
+
+``judge_answer()`` is the threat-data analyst's judge: it grades one
+explanation of a query's rows, always on Claude Haiku 4.5 with the same bounds
+and reply format, whatever ``ANALYSIS_JUDGE`` and ``JUDGE_MODEL`` say (they
+steer the brief's judge). It returns the call's tokens with the score, and it
+never raises either.
 """
 
 from __future__ import annotations
@@ -25,7 +31,8 @@ from dataclasses import dataclass
 import anthropic
 from anthropic.types import TextBlock
 
-from cyber_threat_pipeline.analysis import local
+from cyber_threat_pipeline.analysis import claude, local
+from cyber_threat_pipeline.analysis.completion import Completion
 from cyber_threat_pipeline.core.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -121,3 +128,69 @@ def _parse(reply: str, model: str) -> JudgeScore:
     return JudgeScore(
         supported=sum(1 for c in claims if c["supported"]), total=len(claims), model=model
     )
+
+
+_ANSWER_PROMPT = """\
+You are checking a plain-English explanation of a SQL query's result against that
+result. The question is inside <question>, the query inside <sql>, the rows the
+explanation's writer saw inside <rows>, and the explanation inside <explanation>.
+
+List every factual claim the explanation makes: each number, name, ranking or
+comparison. For each claim, decide whether the rows support it. A claim the rows
+do not show is not supported.
+
+Reply with JSON only, in exactly this shape:
+{{"claims": [{{"claim": "<short quote>", "supported": true}}]}}
+
+<question>
+{question}
+</question>
+
+<sql>
+{sql}
+</sql>
+
+<rows>
+{rows}
+</rows>
+
+<explanation>
+{explanation}
+</explanation>
+"""
+
+
+@dataclass(frozen=True)
+class AnswerScore:
+    """Claims in one analyst explanation the judge found supported, and the judge's call."""
+
+    supported: int
+    total: int
+    model: str
+    completion: Completion
+
+
+def judge_answer(
+    question: str, sql: str, rows_text: str, explanation: str, cfg: Settings
+) -> AnswerScore | None:
+    """Have Claude Haiku grade one analyst explanation; ``None`` when it can't."""
+    if cfg.anthropic_api_key is None:
+        logger.warning("Answer judge skipped: ANTHROPIC_API_KEY isn't set")
+        return None
+    judge_prompt = _ANSWER_PROMPT.format(
+        question=question, sql=sql, rows=rows_text, explanation=explanation
+    )
+    try:
+        completion = claude.complete_claude(
+            judge_prompt,
+            api_key=cfg.anthropic_api_key.get_secret_value(),
+            model=DEFAULT_CLAUDE_JUDGE_MODEL,
+            max_tokens=_MAX_TOKENS,
+            timeout=_CLAUDE_TIMEOUT_SECONDS,
+            max_retries=0,
+        )
+        score = _parse(completion.text, completion.model)
+    except Exception as e:
+        logger.warning("Answer judge failed: %s: %s", type(e).__name__, e)
+        return None
+    return AnswerScore(score.supported, score.total, completion.model, completion)
