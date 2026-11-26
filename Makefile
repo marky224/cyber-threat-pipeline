@@ -34,9 +34,12 @@ help:
 	@echo "    enrich          [ready]   CISA KEV + FIRST EPSS → Neon raw schema (warn-only)"
 	@echo "    transform       [phase 3] dbt build (isolated transform/ env)"
 	@echo "    record-dbt      [phase 7] dbt test counts → latest pipeline.runs row"
-	@echo "    analysis        [phase 4] LLM analyst brief (Grok + Claude)"
+	@echo "    analysis        [phase 4] LLM analyst brief (Claude in production)"
 	@echo "    report          [phase 5] build Evidence site + deploy to S3/CloudFront"
 	@echo "    all             ingest → enrich → transform → record-dbt → analysis → report"
+	@echo ""
+	@echo "  Threat-data analyst (phase 8; live, from your machine)"
+	@echo "    ask             answer one question over the marts: make ask Q=\"...\""
 	@echo ""
 	@echo "  Housekeeping"
 	@echo "    clean           remove caches and build artifacts"
@@ -108,11 +111,20 @@ record-dbt:
 	uv run python -m cyber_threat_pipeline.core.runs
 
 # [phase 4] Analyst brief — spec: phase 04
-# Reads NEON_DATABASE_URL + ANTHROPIC_API_KEY + XAI_API_KEY.
-# Writes markdown into reporting/pages/.
+# Reads NEON_DATABASE_URL and the key of each provider ANALYSIS_PROVIDERS names
+# (production: claude, so ANTHROPIC_API_KEY). Writes markdown into reporting/pages/.
 .PHONY: analysis
 analysis:
 	uv run python -m cyber_threat_pipeline.analysis
+
+# [phase 8] Threat-data analyst — spec: phase 08
+# Reads ANALYST_DATABASE_URL (the read-only analyst login) and XAI_API_KEY; Settings
+# also needs NEON_DATABASE_URL and OTX_API_KEY present, but the analyst never opens
+# NEON_DATABASE_URL. Q comes from the environment (make exports command-line
+# variables), so quotes and apostrophes survive: make ask Q="it's \"x\"".
+.PHONY: ask
+ask:
+	uv run python -m cyber_threat_pipeline.analyst ask "$$Q"
 
 # [phase 5] Reporting + deploy — spec: phase 05
 # Evidence is a Node project; build is `npm run build` inside reporting/.
