@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from cyber_threat_pipeline.analysis import claude, gemini, gpt, grok, local
+from cyber_threat_pipeline.analysis.completion import Completion
 
 ProviderName = Literal["claude", "grok", "gpt", "gemini", "local"]
 
@@ -40,6 +41,9 @@ class Provider:
     credential_attr: str
     # Pretty label rendered into the markdown brief.
     display_label: str
+    # The call that also returns the reply's tokens (the threat-data analyst's).
+    # Set for claude and grok only; the analyst refuses a provider without it.
+    complete: Callable[..., Completion] | None = None
 
 
 PROVIDERS: dict[ProviderName, Provider] = {
@@ -50,6 +54,7 @@ PROVIDERS: dict[ProviderName, Provider] = {
         credential_kind="api_key",
         credential_attr="anthropic_api_key",
         display_label="Claude (Anthropic)",
+        complete=claude.complete_claude,
     ),
     "grok": Provider(
         name="grok",
@@ -58,6 +63,7 @@ PROVIDERS: dict[ProviderName, Provider] = {
         credential_kind="api_key",
         credential_attr="xai_api_key",
         display_label="Grok (xAI)",
+        complete=grok.complete_grok,
     ),
     "gpt": Provider(
         name="gpt",
