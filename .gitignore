@@ -49,6 +49,10 @@ reporting/.svelte-kit/
 # Regenerated on every `make analysis` run — see cyber_threat_pipeline/analysis/.
 reporting/pages/analyst-brief.md
 
+# ----- Threat-data analyst -----
+# Eval reports and recorded replies from `make analyst-eval` (live mart values).
+analyst-evals/
+
 # ----- Terraform (infra/) -----
 infra/.terraform/
 infra/.terraform.lock.hcl
