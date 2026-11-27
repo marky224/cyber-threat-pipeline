@@ -27,9 +27,11 @@ stage does; `ask` and the eval never open `NEON_DATABASE_URL`.
 
 ## Three walls
 
-1. **The role.** `analyst_ro` can read only the 11 mart models: no USAGE on
-   `raw` or `pipeline`, and no grant on the staging or intermediate relations
-   dbt also builds into `marts`. The runner refuses a session that isn't a
+1. **The role.** Of the pipeline's schemas, `analyst_ro` can read only the 11
+   mart models: no USAGE on `raw` or `pipeline`, and no grant on the staging or
+   intermediate relations dbt also builds into `marts`. Postgres's system
+   catalogs stay readable to every role, as they always are; the guard refuses
+   any query that names them. The runner refuses a session that isn't a
    member of `analyst_ro`, or that can use `raw` or `pipeline`.
 2. **The guard** (`guard.py`). One statement, and a query; only allow-listed
    syntax, functions and casts; only the 11 marts; no E'' or U&'' strings. It
@@ -83,8 +85,9 @@ make analyst-check    # NEON_DATABASE_URL from the environment: the database's o
 ```
 
 Offline, after `dbt build`: CI's dbt job runs it on the seeded postgres:15, and
-so does local proof. It checks that `analyst_ro` can read exactly the 11 marts
-and has no USAGE on `raw`, `pipeline` or `dbt_test__audit`; that the schema
+so does local proof. It checks that `analyst_ro` can read exactly the 11 marts,
+each as a whole table, and not one column of anything else in `marts`, and has
+no USAGE on `raw`, `pipeline` or `dbt_test__audit`; that the schema
 card's columns and types equal `information_schema.columns`; that every gold
 query's rendering returns the same rows as its gold text, as `analyst_ro`; and
 that a gold-echo eval (each question answered with its own gold SQL, no
