@@ -211,7 +211,10 @@ def _answer(
     try:
         with runner.transaction(conn, repeatable_read=True) as read:
             gold = read(gold_checked.sql)
-            model = read(checked.sql)
+            # A read cut at cap + 1 can leave the transaction aborted (psycopg cancels
+            # the rest of the query), and a cut gold result fails the question anyway.
+            if not gold.cut:
+                model = read(checked.sql)
     except runner.QueryFailed as failed:
         error = failed
     # The transaction is closed: every model call below runs outside it.
@@ -236,9 +239,10 @@ def _answer(
     if error is not None:
         why = _query_error(error)
         return done(False, f"gold query failed: {why}" if gold is None else why)
-    assert gold is not None and model is not None
+    assert gold is not None
     if gold.cut:
         return done(False, "gold result cut at the row cap")
+    assert model is not None
     if model.cut:
         return done(False, "model result cut at the row cap")
     verdict = compare(gold.rows, model.rows, ordered=q.ordered, tolerance=q.tolerance)

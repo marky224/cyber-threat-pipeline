@@ -46,8 +46,10 @@ def run(conn: psycopg.Connection[tuple[Any, ...]], questions: list[GoldQuestion]
 
 
 def _role(conn: psycopg.Connection[tuple[Any, ...]]) -> list[str]:
+    # Readable means SELECT on the table or on any of its columns: has_table_privilege
+    # doesn't see a column-level grant.
     rows = conn.execute(
-        "select c.relname, has_table_privilege(%s, c.oid, 'select')"
+        "select c.relname, has_any_column_privilege(%s, c.oid, 'select')"
         " from pg_class c join pg_namespace n on n.oid = c.relnamespace"
         " where n.nspname = %s and c.relkind in ('r', 'v', 'm', 'p', 'f')",
         (_ROLE, MART_SCHEMA),
@@ -104,11 +106,14 @@ def _renderings(
             continue
         try:
             with runner.transaction(conn, repeatable_read=True) as read:
-                text, rendering = read(q.sql), read(checked.sql)
+                text = read(q.sql)
+                # A read cut at cap + 1 can leave the transaction aborted (psycopg
+                # cancels the rest of the query), so nothing more is read after one.
+                rendering = None if text.cut else read(checked.sql)
         except runner.QueryFailed as error:
             failures.append(f"{q.id}: {error.sqlstate}: {error.message}")
             continue
-        if text.cut or rendering.cut:
+        if rendering is None or rendering.cut:
             failures.append(f"{q.id}: a result is cut at the row cap")
             continue
         verdict = compare(text.rows, rendering.rows, ordered=q.ordered)

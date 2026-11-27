@@ -295,6 +295,18 @@ def test_a_model_result_cut_at_the_cap_fails(
     assert answer.reason == "model result cut at the row cap"
 
 
+def test_a_gold_result_cut_at_the_cap_stops_before_the_model_s_query(
+    conn: psycopg.Connection[tuple[Any, ...]], gold: list[evaluate.GoldQuestion]
+) -> None:
+    # A gold double over the cap. Its cut read may abort the transaction (psycopg
+    # cancels the rest), so the model's query must not be read after it.
+    big = dataclasses.replace(gold[0], sql="select g from generate_series(1, 200000) g")
+    (answer,) = evaluate.evaluate(conn, [big], provider="grok", write_sql=check.gold_echo).answers
+    assert answer.reason == "gold result cut at the row cap"
+    assert answer.gold is not None and answer.gold.cut
+    assert answer.model is None
+
+
 def test_brief_input_s_generated_at_is_none_when_unreadable(
     conn: psycopg.Connection[tuple[Any, ...]], gold: list[evaluate.GoldQuestion]
 ) -> None:
