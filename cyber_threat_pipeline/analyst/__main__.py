@@ -22,23 +22,34 @@ as a generic command holds the statement's text, so its logger is kept below
 WARNING.
 
 Exit codes: ``ask`` 0 when an answer is printed, 1 on a refusal, a
-CANNOT_ANSWER or a query error; ``eval`` 0 once the run completes, whatever the
-accuracy; ``check`` 0 when every check passes, 1 when one fails. All three exit
-2 on a setup error (a missing setting or key, no connection, an unreadable gold
-file or a gold query the guard refuses, a session that isn't analyst_ro's, or a
-database error outside a checked query, such as a lost connection), printed as
-one ``setup error:`` line. What a database failure prints depends on where it
-happens:
+CANNOT_ANSWER or a query error, a connection lost during the query included;
+``eval`` 0 once the run completes, whatever the accuracy; ``check`` 0 when every
+check passes, 1 when one fails. All three exit 2 on a setup error (a missing
+setting or key, no connection, an unreadable gold file or a gold query the guard
+refuses, a session that isn't analyst_ro's, or a database error outside a
+checked query, such as a lost connection), printed as one ``setup error:``
+line. What a database failure prints depends on where it happens:
 
 - a URL libpq can't parse: a fixed line that never quotes it, since libpq's parse
   error quotes the token it can't read, which can be the password;
-- a well-formed URL that fails to connect: libpq's first line (``_connect``),
-  which names the host and port (and the user, for a refused login), not the
-  password;
-- a query error: the server's message, or libpq's first line when the
-  connection broke during the query (``runner._message``). ``ask`` prints it
-  after ``Query error:``, the eval records it as that question's reason, and the
-  check prints it in that query's failure line;
+- a well-formed URL that fails to connect: the connect error's first line
+  (``_connect``), libpq's, which names the host and port (and the user, for a
+  refused login), or psycopg's ``failed to resolve host '...'``, which names the
+  host, when the name doesn't resolve. Neither names the password as long as
+  its special characters are percent-encoded: an unencoded ``@`` ends the
+  password early, and the rest of it is printed as part of the host;
+- a query error the connection survives: the server's message, or psycopg's for
+  a value it can't load, such as an infinity date (``runner._message``). ``ask``
+  prints it after ``Query error:``, the eval records it as that question's
+  reason, and the check prints it in that query's failure line;
+- a connection broken during a query: ``ask`` prints the error's first line
+  after ``Query error: None:`` and exits 1. ``check`` and the eval stop at their
+  next statement, the next ``BEGIN``, with ``_database_error``'s fixed line and
+  exit 2, with no failure lines and no report. A break during the eval's last
+  statement, its closing read of ``brief_input.generated_at``
+  (``evaluate._generated_at``), is the exception: the run ends as usual, its
+  report records no end time and warns that a dbt build ran, and the check
+  doesn't notice it;
 - any other database error that reaches ``main``: its SQLSTATE and the server's
   message, or one fixed line when it has no SQLSTATE, as for a lost connection
   (``_database_error``).
@@ -106,8 +117,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _database_error(error: psycopg.Error) -> str:
     """One line for a database error that reaches ``main``, outside a checked query.
 
-    A server error gives its SQLSTATE and the server's message; an error with no
-    SQLSTATE, as for a lost connection, gives one fixed line instead of libpq's text.
+    That includes a connection that broke during one of ``check``'s or the eval's
+    queries, other than the eval's last: it raises at their next statement. A
+    server error gives its SQLSTATE and the server's message; an error with no
+    SQLSTATE, as for a lost connection, gives one fixed line instead of libpq's
+    text.
     """
     if error.sqlstate:
         # A server error: its message is the server's, never the connection string.
