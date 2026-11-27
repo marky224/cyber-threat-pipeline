@@ -52,6 +52,7 @@ SHOWN_ROWS = 20  # rows of each result shown for a failed question
 
 _REPORT = re.compile(r"^(?P<stamp>[0-9]{8}T[0-9]{6}Z)-(?P<provider>[a-z0-9_-]+)\.json$")
 _ANALYST_CALLS = ("sql", "explanation")
+_CUT_STOPS = frozenset({"length", "max_tokens"})  # xAI's and Anthropic's output-limit stops
 
 WriteSql = Callable[["GoldQuestion"], Completion]
 Explain = Callable[[str], Completion]
@@ -295,6 +296,21 @@ class Dollars:
         return money if self.complete else f"incomplete (priced calls: {money})"
 
 
+def _weak_pass(a: Answer) -> bool:
+    """A pass against an empty gold result. compare marks every empty gold result weak."""
+    return a.passed and a.weak
+
+
+def _explanation_cut(a: Answer) -> bool:
+    """Whether the explanation's reply stopped at its output limit."""
+    return any(
+        call.name == "explanation"
+        and call.completion is not None
+        and call.completion.stop_reason in _CUT_STOPS
+        for call in a.calls
+    )
+
+
 def summary(run: EvalRun) -> dict[str, Any]:
     """Accuracy, tokens by kind, dollars by group and the judge's count, for one run."""
     total = len(run.answers)
@@ -323,7 +339,7 @@ def summary(run: EvalRun) -> dict[str, Any]:
         "total": total,
         "percent": percent,
         "meets_bar": percent >= PASS_BAR,
-        "weak": sum(a.weak for a in run.answers),
+        "weak": sum(_weak_pass(a) for a in run.answers),
         "tokens": tokens,
         "calls": len(calls),
         "calls_with_unreported_tokens": unreported,
@@ -401,12 +417,13 @@ def _answer_json(a: Answer) -> dict[str, Any]:
         "question": a.question,
         "passed": a.passed,
         "reason": a.reason,
-        "weak": a.weak,
+        "weak": _weak_pass(a),
         "model_sql": a.model_sql,
         "rendering": a.rendering,
         "gold_rows": None if a.gold is None else len(a.gold.rows),
         "model_rows": None if a.model is None else len(a.model.rows),
         "explanation": a.explanation,
+        "explanation_cut": _explanation_cut(a),
         "judge": None if a.judge is None else {"supported": a.judge[0], "claims": a.judge[1]},
         "calls": [_call_json(call) for call in a.calls],
     }
@@ -474,7 +491,7 @@ def markdown(run: EvalRun) -> str:
     for a in run.answers:
         lines.append(
             f"| {a.id} | {'pass' if a.passed else 'fail'} | {_cell(a.reason or '')} | "
-            f"{'weak' if a.weak else ''} | {_count(a.gold)} | {_count(a.model)} | "
+            f"{'weak' if _weak_pass(a) else ''} | {_count(a.gold)} | {_count(a.model)} | "
             f"{'' if a.judge is None else f'{a.judge[0]}/{a.judge[1]}'} | "
             f"{_dollars(list(a.calls)).text()} |"
         )
@@ -507,7 +524,12 @@ def _answer_markdown(a: Answer) -> list[str]:
             if result is not None:
                 lines += ["", f"{label} rows ({len(result.rows):,}):", "", *_rows(result)]
     if a.explanation is not None:
-        lines += ["", "Explanation:", "", *_fenced(a.explanation, "")]
+        heading = (
+            "Explanation (cut: the reply stopped at its output limit):"
+            if _explanation_cut(a)
+            else "Explanation:"
+        )
+        lines += ["", heading, "", *_fenced(a.explanation, "")]
     lines += ["", "Calls:", ""]
     lines += [f"- {_call_line(call)}" for call in a.calls]
     return lines

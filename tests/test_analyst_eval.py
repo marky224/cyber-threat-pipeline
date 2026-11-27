@@ -12,6 +12,7 @@ no database.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -385,3 +386,39 @@ def test_the_markdown_warns_when_the_marts_were_rebuilt_during_the_run() -> None
     )
     assert "WARNING: brief_input.generated_at changed during the run" in evaluate.markdown(rebuilt)
     assert "WARNING" not in evaluate.markdown(run)
+
+
+def test_a_failed_answer_with_an_empty_gold_result_is_no_weak_pass() -> None:
+    passed = dataclasses.replace(
+        _answer("q01", True), weak=True, gold=runner.Result((), [], False), model=None
+    )
+    failed = dataclasses.replace(
+        _answer("q02", False),
+        reason="row count differs: gold 0, model 1",
+        weak=True,  # compare marks every empty gold result weak
+        gold=runner.Result((), [], False),
+    )
+    run = _eval_run("grok", "20261126T190000Z", passed, failed)
+    assert evaluate.summary(run)["weak"] == 1
+    text = evaluate.markdown(run)
+    assert "Weak passes (empty gold result): 1." in text
+    assert "| q02 | fail | row count differs: gold 0, model 1 |  |" in text
+    assert [q["weak"] for q in evaluate.to_json(run)["questions"]] == [True, False]
+    only_failed = _eval_run("grok", "20261126T190000Z", failed)
+    assert "Weak passes (empty gold result): 0." in evaluate.markdown(only_failed)
+
+
+@pytest.mark.parametrize(("stop", "cut"), [("length", True), ("max_tokens", True), ("stop", False)])
+def test_an_explanation_cut_at_its_output_limit_is_recorded_as_cut(stop: str, cut: bool) -> None:
+    answer = _answer("q01", True)
+    sql_call, explanation_call, judge_call = answer.calls
+    assert explanation_call.completion is not None
+    explanation_call = dataclasses.replace(
+        explanation_call,
+        completion=dataclasses.replace(explanation_call.completion, stop_reason=stop),
+    )
+    answer = dataclasses.replace(answer, calls=(sql_call, explanation_call, judge_call))
+    run = _eval_run("grok", "20261126T190000Z", answer)
+    heading = "Explanation (cut: the reply stopped at its output limit):"
+    assert (heading in evaluate.markdown(run)) is cut
+    assert evaluate.to_json(run)["questions"][0].get("explanation_cut") is cut
