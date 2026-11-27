@@ -12,7 +12,9 @@ and returns a ``Verdict``:
   number; integers, numerics and floats compare as Decimals, within
   ``tolerance``; text is exact; a date equals the same day's midnight
   timestamp (a timestamptz by its wall-clock time in the session's time zone,
-  which both results share); JSON compares by value.
+  which both results share); JSON compares by value. NaN equals NaN and each
+  infinity equals itself, as in Postgres; neither equals a finite number,
+  whatever the tolerance.
 - With a tolerance, rows compared as a multiset are first grouped by their
   values that aren't numbers, and each group's rows are paired in sorted order
   of their numbers. That pairing is exact for one number per row, which is
@@ -34,8 +36,8 @@ from typing import Any
 
 MAX_COLUMNS = 10
 
-# A normalized value: (kind, value). Numbers are ("num", Decimal); every other
-# kind compares exactly.
+# A normalized value: (kind, value). Finite numbers are ("num", Decimal); every
+# other kind, NaN and the infinities ("non-finite") included, compares exactly.
 _Cell = tuple[str, Any]
 _Row = tuple[_Cell, ...]
 
@@ -86,10 +88,12 @@ def _normalize(value: Any) -> _Cell:
         return ("null", None)
     if isinstance(value, bool):
         return ("bool", value)
-    if isinstance(value, int | Decimal):
-        return ("num", Decimal(value))
-    if isinstance(value, float):
-        return ("num", Decimal(repr(value)))
+    if isinstance(value, int | Decimal | float):
+        number = Decimal(repr(value)) if isinstance(value, float) else Decimal(value)
+        if number.is_finite():
+            return ("num", number)
+        # Decimal arithmetic and ordering raise on NaN and infinities; compare them by name.
+        return ("non-finite", "NaN" if number.is_nan() else str(number))
     if isinstance(value, str):
         return ("text", value)
     if isinstance(value, dt.datetime):

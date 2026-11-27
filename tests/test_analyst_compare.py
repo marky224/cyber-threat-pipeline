@@ -127,3 +127,31 @@ def test_a_tolerance_pairs_numbers_within_each_group_in_sorted_order() -> None:
     # The text parts must still match exactly.
     model[1] = ("c", Decimal("1.00"))
     assert _match(gold, model, tolerance=Decimal("0.01")).passed is False
+
+
+_NAN, _INF = Decimal("NaN"), Decimal("Infinity")
+
+
+@pytest.mark.parametrize(
+    ("gold", "model", "kw", "passed"),
+    [
+        pytest.param(_INF, _INF, {"ordered": True}, True, id="infinity-ordered"),
+        pytest.param(-_INF, -_INF, {"tolerance": Decimal("0.1")}, True, id="minus-infinity"),
+        # Postgres treats NaN = NaN as true, for numeric and float8 alike. Each side gets
+        # its own NaN object: a dict lookup would match one object by identity.
+        pytest.param(_NAN, Decimal("NaN"), {}, True, id="nan-as-a-set"),
+        pytest.param(_NAN, float("nan"), {"ordered": True}, True, id="nan-float-ordered"),
+        pytest.param(
+            _NAN, Decimal("NaN"), {"tolerance": Decimal("0.1")}, True, id="nan-with-tolerance"
+        ),
+        pytest.param(_NAN, 1, {"tolerance": Decimal("0.1")}, False, id="nan-vs-finite"),
+        pytest.param(_INF, -_INF, {"ordered": True}, False, id="infinity-vs-minus-infinity"),
+        pytest.param(float("inf"), 1e308, {"tolerance": Decimal("0.1")}, False, id="inf-vs-big"),
+    ],
+)
+def test_non_finite_numbers_compare_without_raising(
+    gold: Any, model: Any, kw: dict[str, Any], passed: bool
+) -> None:
+    verdict = _match([(gold,)], [(model,)], **kw)
+    assert verdict.passed is passed
+    assert (verdict.reason is None) is passed
