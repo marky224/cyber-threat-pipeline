@@ -11,9 +11,11 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from anthropic.types import Message, TextBlock, Usage
 
 from cyber_threat_pipeline.analysis import judge, local
 from cyber_threat_pipeline.core.config import Settings
+from tests import conftest
 from tests.conftest import FakeJudgeClient
 
 _REPLY = '{"claims": [{"claim": "a", "supported": true}, {"claim": "b", "supported": true},'
@@ -141,3 +143,109 @@ def test_a_failing_judge_call_gives_no_score(
     cfg = _cfg(ANALYSIS_JUDGE="claude", ANTHROPIC_API_KEY="k")
     assert judge.judge("p", "b", cfg) is None
     assert "TimeoutError" in caplog.text
+
+
+# --- judge_answer: the threat-data analyst's judge -----------------------------
+# Its Anthropic client is a fake returning a real anthropic.types.Message with
+# Usage, as in test_claude.py, since judge_answer reports the call's tokens.
+
+
+class _FakeAnswerClient:
+    """Stands in for ``anthropic.Anthropic`` in claude.py; records the client and requests."""
+
+    def __init__(self, reply: str | Exception, content: list[Any] | None = None) -> None:
+        self.reply = reply
+        self.content = content
+        self.inits: list[dict[str, Any]] = []
+        self.requests: list[dict[str, Any]] = []
+        self.messages = self
+
+    def __call__(self, **kwargs: Any) -> _FakeAnswerClient:
+        self.inits.append(kwargs)
+        return self
+
+    def create(self, **kwargs: Any) -> Message:
+        conftest.check_create_kwargs(kwargs)
+        self.requests.append(kwargs)
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        content = (
+            self.content if self.content is not None else [TextBlock(type="text", text=self.reply)]
+        )
+        return Message(
+            id="msg_test",
+            type="message",
+            role="assistant",
+            model="claude-haiku-4-5",
+            content=content,
+            stop_reason="end_turn",
+            stop_sequence=None,
+            usage=Usage(input_tokens=700, output_tokens=90),
+        )
+
+
+def _answer_client(
+    monkeypatch: pytest.MonkeyPatch, reply: str | Exception, content: list[Any] | None = None
+) -> _FakeAnswerClient:
+    fake = _FakeAnswerClient(reply, content)
+    monkeypatch.setattr("cyber_threat_pipeline.analysis.claude.anthropic.Anthropic", fake)
+    return fake
+
+
+def _judge_answer(cfg: Settings) -> judge.AnswerScore | None:
+    return judge.judge_answer("QUESTION?", "SELECT 1", "1 rows.\n\nRows:\nn\n7\n", "EXPLAINED", cfg)
+
+
+def test_answer_judge_grades_on_haiku_with_a_bounded_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _answer_client(monkeypatch, _REPLY)
+    score = _judge_answer(_cfg(ANTHROPIC_API_KEY="k"))
+    assert score is not None
+    assert (score.supported, score.total, score.model) == (2, 3, "claude-haiku-4-5")
+    assert (score.completion.input_tokens, score.completion.output_tokens) == (700, 90)
+    assert fake.inits == [{"api_key": "k", "timeout": 60.0, "max_retries": 0}]
+    [request] = fake.requests
+    assert (request["model"], request["max_tokens"]) == ("claude-haiku-4-5", 4000)
+    sent = request.keys() | request.get("extra_body", {}).keys()
+    assert not {"temperature", "top_p", "top_k"} & sent
+    prompt = request["messages"][0]["content"]
+    for part in ("QUESTION?", "SELECT 1", "Rows:\nn\n7", "EXPLAINED"):
+        assert part in prompt
+
+
+def test_answer_judge_ignores_the_brief_judge_s_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _answer_client(monkeypatch, _REPLY)
+    cfg = _cfg(ANTHROPIC_API_KEY="k", ANALYSIS_JUDGE="local", JUDGE_MODEL="claude-opus-5-5")
+    score = _judge_answer(cfg)
+    assert score is not None and score.model == "claude-haiku-4-5"
+    assert fake.requests[0]["model"] == "claude-haiku-4-5"
+
+
+def test_answer_judge_without_a_key_is_skipped(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake = _answer_client(monkeypatch, _REPLY)
+    assert _judge_answer(_cfg()) is None
+    assert fake.requests == []
+    assert "ANTHROPIC_API_KEY" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("reply", "content"),
+    [
+        pytest.param(TimeoutError("judge timed out"), None, id="failed-call"),
+        pytest.param("I think it is mostly fine.", None, id="no-json"),
+        pytest.param('{"claims": [{"claim": "a"}]}', None, id="no-supported-flag"),
+        pytest.param("", [], id="no-text-block"),
+    ],
+)
+def test_answer_judge_never_raises(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    reply: str | Exception,
+    content: list[Any] | None,
+) -> None:
+    _answer_client(monkeypatch, reply, content)
+    assert _judge_answer(_cfg(ANTHROPIC_API_KEY="k")) is None
+    assert "Answer judge failed" in caplog.text

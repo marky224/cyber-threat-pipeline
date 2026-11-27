@@ -7,6 +7,8 @@ ingestion   Extract from OTX, transform with pandas, idempotent upsert into Neon
 enrichment  CISA KEV catalog + FIRST EPSS scores for the corpus's CVE ids into Neon raw schema
             (bounded downloads, validated whole, warn-only).
 analysis    Post-dbt LLM analyst brief (Grok + Claude side-by-side).
+analyst     The threat-data analyst: plain-English questions over the 11 marts, answered with
+            one checked read-only query.
 
 The private build-grade phase specs govern each subpackage.
 """

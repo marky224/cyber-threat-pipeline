@@ -17,6 +17,7 @@ flowchart TB
         Ingest["ingestion<br/>extract → transform → load<br/>watermark-driven upsert"]
         Enrich["enrichment<br/>KEV catalog + EPSS scores<br/>validated · warn-only"]
         Analysis["analysis<br/>LLM analyst brief<br/>Claude primary · 5 providers swappable<br/>any 2 side-by-side"]
+        Analyst["analyst<br/>threat-data analyst · make ask<br/>one guarded read-only query<br/>run by the operator, not the cron"]
     end
 
     subgraph Neon["Neon Postgres · pgbouncer-pooled"]
@@ -65,6 +66,7 @@ flowchart TB
     Analysis -.audit row.-> Audit
     Audit -.grafana_ro.-> Dash
     Marts -.grafana_ro.-> Dash
+    Marts -.analyst_ro · 11 marts only.-> Analyst
     Dash --> Alerts
 ```
 
@@ -91,14 +93,15 @@ No other scheduler exists. The Makefile is the single source of truth for stage 
 
 ### Python application (`cyber_threat_pipeline/`)
 
-Python 3.12, managed by `uv` (lockfile is authoritative). Four subpackages:
+Python 3.12, managed by `uv` (lockfile is authoritative). Five subpackages:
 
 - `core/` — config (`pydantic-settings`), logging, Neon connection helpers.
 - `ingestion/` — `extract` (OTX SDK) → `transform` (pandas) → `load` (idempotent `INSERT … ON CONFLICT` upsert into Neon's `raw` schema). Watermark lives in `pipeline.state.modified_since`.
 - `enrichment/` — CISA KEV and FIRST EPSS for the corpus's CVE indicators, upserted into `raw.kev_vulnerabilities` / `raw.epss_scores`. Every download is HTTPS-only, size-capped, time-boxed and retried at most three times; every response is validated whole (strict types, CVE-id patterns, counts) or dropped. A feed that is down or invalid keeps its stored snapshot, and the step exits 0.
 - `analysis/` — LLM analyst brief. Reads from `marts`, prompts the configured **primary** and **secondary** providers (Claude · Grok · GPT · Gemini · local Ollama), writes a side-by-side markdown page consumed by Evidence.
+- `analyst/` — the threat-data analyst, the operator's command line (`make ask`, `make analyst-eval`, `make analyst-check`), not part of the weekly run. A plain-English question goes to Grok for one SQL query; a guard parses it with sqlglot and allows one query over the 11 marts, with allow-listed syntax, functions and casts; the runner executes the guard's own rendering, never the model's text, in a `READ ONLY` transaction as `analyst_login`; Grok then explains the rows. An eval runs 30 gold questions with hand-checked SQL and scores each answer by comparing query results, with tokens and dollars per call.
 
-The analyst is provider-agnostic by design: a single env-var (`ANALYSIS_PRIMARY_PROVIDER`) swaps the model behind the brief, and any two providers render in tabbed comparison on the same input. Claude is the production primary; the code default is `local` (Ollama) so dev/CI runs without any cloud API keys.
+The analyst brief is provider-agnostic by design: a single env-var (`ANALYSIS_PRIMARY_PROVIDER`) swaps the model behind the brief, and any two providers render in tabbed comparison on the same input. Claude is the production primary; the code default is `local` (Ollama) so dev/CI runs without any cloud API keys.
 
 ### Warehouse — Neon Postgres
 
@@ -112,7 +115,7 @@ Three database roles:
 
 - The application role has full DDL/DML on `raw`, `marts`, `pipeline`.
 - `grafana_ro` is read-only and scoped to `marts` + `pipeline.runs`. Grafana Cloud connects only with this role.
-- `analyst_ro` is the threat-data analyst's read-only role, NOLOGIN: SELECT on the 11 mart models only, through dbt `+grants`, and no USAGE on `raw` or `pipeline`. Its login and the analyst CLI arrive in a later change.
+- `analyst_ro` is the threat-data analyst's read-only role, NOLOGIN: SELECT on the 11 mart models only, through dbt `+grants`, and no USAGE on `raw` or `pipeline`. Its one login, `analyst_login`, is made by hand through psql (`sql/README.md`); the analyst's `make ask` and `make analyst-eval` connect only with it, and refuse a session that can use `raw` or `pipeline`.
 
 ### Transformation — dbt Core (`transform/`)
 
@@ -197,7 +200,8 @@ Any stage failure writes a `failed` row to `pipeline.runs` and trips the `ctp-ru
 | Grafana Cloud → Neon | `grafana_ro` role; read-only, scoped to `marts` + `pipeline.runs`. |
 | Evidence build → Neon | Build-time queries via the application role; static output bakes results into HTML, no live DB connection from the published site. |
 | Enrichment → CISA / FIRST | HTTPS GET only, no credentials sent; the `pipeline.yml` step blanks the AWS credentials in its environment. Responses are size-capped and validated whole before anything is written. |
-| LLM providers → Neon | Providers never see the database — the analyst step fetches data first, then sends a synthesized prompt. |
+| LLM providers → Neon (the brief) | Providers never see the database — the brief's analysis step fetches data first, then sends a synthesized prompt. |
+| Threat-data analyst → Neon | A model writes SQL that runs on Neon, through `analyst_login` only (a member of `analyst_ro`, which of the pipeline's schemas can read only the 11 marts; Postgres's system catalogs stay readable to every role, and the guard refuses any query that names them). The guard checks the query and the runner executes the guard's own rendering, with its outer LIMIT capped at 1,001 rows, in a `READ ONLY` transaction with a 5 s statement timeout, sent by the extended protocol so the server runs one statement only. The model sees the schema card and its own query's rows, never a credential; everything it writes is printed with control characters escaped. |
 | `_private/` content | Never crosses the public boundary: private material is kept out of git by per-checkout excludes, and `.gitignore` excludes `.env`. CI runs `gitleaks` on every push. |
 
 ## Why this shape

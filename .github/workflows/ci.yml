@@ -143,6 +143,9 @@ jobs:
           cp transform/profiles.yml.example transform/profiles.yml
           make -C transform build
 
+      - name: analyst check (role grants, schema card, gold set)
+        run: make analyst-check
+
       - name: dbt docs generate (smoke-check the lineage graph)
         env:
           DO_NOT_TRACK: "1"

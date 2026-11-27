@@ -71,7 +71,9 @@ Every stage is reproducible locally with the same `make` target — local dev an
 
 ## Security posture
 
-**Least-privilege observability.** Grafana Cloud connects to Neon as `grafana_ro`, scoped strictly to `marts` and `pipeline.runs`. The application role used by ingest, dbt, and the analyst brief is separate and only runs from inside the GitHub Actions cron.
+**Least-privilege observability.** Grafana Cloud connects to Neon as `grafana_ro`, scoped strictly to `marts` and `pipeline.runs`. The application role used by ingest, dbt, and the analyst brief is separate: the weekly GitHub Actions run uses it, and the operator uses it by hand to apply the `sql/` schema files and to create the two logins, Grafana's `grafana_login` and the analyst's `analyst_login` ([`sql/README.md`](sql/README.md), bootstrap steps 4 and 5).
+
+**A read-only analyst.** `make ask` turns a plain-English question into one SQL query that Grok writes, and the query never runs as written. A guard parses it and allows one query over the 11 marts, with allow-listed syntax, functions and casts and no escape strings; the runner executes the guard's own rendering, with a row cap, in a `READ ONLY` transaction with a 5-second timeout. It connects as `analyst_login`, a member of `analyst_ro`, which of the pipeline's schemas can read only the 11 marts: no `raw`, no `pipeline`, and no staging views. Postgres's system catalogs stay readable to every role, as they always are; the guard refuses any query that names them. The model sees a schema card and its own query's rows, never a credential, and everything it writes is printed with control characters escaped.
 
 **OIDC-only AWS access.** Site deploys assume an IAM role via GitHub's OIDC provider — no long-lived AWS keys in repo secrets. The trust policy is pinned to `ref:refs/heads/main` + `environment:production`, and the OIDC provider itself is a Terraform `data` lookup so the same code works whether the AWS account already has one or not.
 
@@ -97,7 +99,8 @@ cyber_threat_pipeline/      Python app package
 ├── core/                   Config (pydantic-settings), logging, Neon connection helpers
 ├── ingestion/              OTX extract → pandas transform → idempotent upsert into `raw` · watermark-driven
 ├── enrichment/             CISA KEV + FIRST EPSS for the corpus's CVE ids → `raw` · bounded downloads · validated whole · warn-only
-└── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
+├── analysis/               LLM analyst brief · Claude in production · 5 providers swappable · grounding checks
+└── analyst/                Threat-data analyst · `make ask` · one guarded read-only query over the 11 marts · explained answer
 sql/                        Schemas (raw · marts · pipeline) + audit tables + `grafana_ro`, `analyst_ro` read-only roles
 transform/                  dbt Core (isolated env) · 11 marts · staging → intermediate → marts · schema + data tests
 reporting/                  Evidence.dev (Node 24 LTS) · 4 pages · postgres datasource via single connection-string env
@@ -118,6 +121,14 @@ make test         # pytest
 ```
 
 Stage commands (`make ingest`, `make transform`, `make record-dbt`, `make analysis`, `make report`, `make all`) run the same targets that the weekly cron invokes — see [How a weekly run executes](#how-a-weekly-run-executes) for what each stage does.
+
+The threat-data analyst ([`cyber_threat_pipeline/analyst/`](cyber_threat_pipeline/analyst/README.md)) has three more:
+
+```bash
+make ask Q="Which tags are on the most pulses?"   # live: one question, answered from the marts
+make analyst-eval PROVIDER=grok RECORD=1          # live: the 30 gold questions, scored, with dollars
+make analyst-check                                # offline, after dbt build; CI runs it too
+```
 
 ## License
 

@@ -1,0 +1,470 @@
+# The threat-data analyst's gold set: plain-English questions about the 11 marts, each with
+# hand-checked SQL. An eval runs the gold SQL and the model's query and compares their rows,
+# never their SQL text.
+#
+# Each [[question]] holds:
+#   id, question;
+#   marts       the marts the gold SQL reads;
+#   kind        single (one mart) or join (two);
+#   difficulty  easy, medium or hard;
+#   ordered     true when rows are compared in order, false when compared as a set;
+#   tolerance   an absolute tolerance for numbers (0 when absent);
+#   sql         the gold SQL;
+#   checkable   what the answer rests on: a key, a dbt test, an exact integer or a tolerance.
+#
+# No question uses a label from live data (a country, tag, industry, author or pulse name). The
+# only literals are values the code defines, the 2025 bounds in q16, and numbers a question
+# states. A ranking over small counts names its tiebreak.
+
+[[question]]
+id = "q01"
+question = "Which indicator type has the most indicators, and how many does it have?"
+marts = ["mart_indicator_types"]
+kind = "single"
+difficulty = "easy"
+ordered = true
+sql = '''
+select type, indicator_count
+from marts.mart_indicator_types
+order by indicator_count desc, type
+limit 1
+'''
+checkable = "`type` is the mart's key (dbt `unique`), and the count is an exact integer from one build. The SQL breaks a tie at the top by type."
+
+[[question]]
+id = "q02"
+question = "Which three industries are targeted by the most pulses? Break ties alphabetically."
+marts = ["mart_top_industries"]
+kind = "single"
+difficulty = "easy"
+ordered = true
+sql = '''
+select industry, pulse_count
+from marts.mart_top_industries
+order by pulse_count desc, industry
+limit 3
+'''
+checkable = "`industry` is unique (dbt test), and the question names the tiebreak, so the three rows are fixed even when counts tie."
+
+[[question]]
+id = "q03"
+question = "How many countries are targeted by at least 10 pulses?"
+marts = ["mart_targeted_countries"]
+kind = "single"
+difficulty = "easy"
+ordered = false
+sql = '''
+select count(*)
+from marts.mart_targeted_countries
+where pulse_count >= 10
+'''
+checkable = "One integer, with the threshold the question states; `country` is unique (dbt test)."
+
+[[question]]
+id = "q04"
+question = "What are the five most common tags by number of pulses, with their pulse counts? Break ties alphabetically."
+marts = ["mart_threat_tags"]
+kind = "single"
+difficulty = "easy"
+ordered = true
+sql = '''
+select tag, pulse_count
+from marts.mart_threat_tags
+order by pulse_count desc, tag
+limit 5
+'''
+checkable = "`tag` is unique (dbt test), and `int_pulse_tag` takes each tag exactly as OTX sent it, so no spelling merges with another. The tiebreak is named."
+
+[[question]]
+id = "q05"
+question = "What percentage of indicators were active at the latest successful pipeline run?"
+marts = ["mart_data_quality"]
+kind = "single"
+difficulty = "easy"
+ordered = false
+tolerance = 0.01
+sql = '''
+select pct_active
+from marts.mart_data_quality
+'''
+checkable = "The mart is one row, for the latest successful run. `pct_active` is a 0-100 percentage rounded to two decimals, and the 0.01 tolerance also accepts `100.0 * active_indicators / total_indicators` unrounded. A 0-1 ratio fails."
+
+[[question]]
+id = "q06"
+question = "In which month were the most pulses created, and how many? If months tie, give the latest one."
+marts = ["mart_pulse_trends_monthly"]
+kind = "single"
+difficulty = "easy"
+ordered = true
+sql = '''
+select month, pulse_count
+from marts.mart_pulse_trends_monthly
+order by pulse_count desc, month desc
+limit 1
+'''
+checkable = "`month` is unique (dbt test) and is the month of OTX's `created` date, not of the pulse's first sighting. The tiebreak is named. `date_trunc('month', created)` over `mart_top_pulses` also passes: its midnight timestamp compares equal to the date."
+
+[[question]]
+id = "q07"
+question = "How many distinct CVE ids does the corpus hold?"
+marts = ["mart_cve_enrichment"]
+kind = "single"
+difficulty = "easy"
+ordered = false
+sql = '''
+select count(*)
+from marts.mart_cve_enrichment
+'''
+checkable = "The mart has one row per CVE id (dbt `unique`). `mart_data_quality.cve_ids` holds the same count, so either route passes."
+
+[[question]]
+id = "q08"
+question = "How many of the corpus's CVE ids are in CISA's Known Exploited Vulnerabilities catalog?"
+marts = ["mart_cve_enrichment"]
+kind = "single"
+difficulty = "easy"
+ordered = false
+sql = '''
+select count(*)
+from marts.mart_cve_enrichment
+where in_kev
+'''
+checkable = "`in_kev` is never NULL (dbt test) and is true when the CVE id is in the latest KEV snapshot. The count equals `mart_data_quality.cve_ids_in_kev`."
+
+[[question]]
+id = "q09"
+question = "How many runs are recorded in the data-quality history?"
+marts = ["mart_data_quality_history"]
+kind = "single"
+difficulty = "easy"
+ordered = false
+sql = '''
+select count(*)
+from marts.mart_data_quality_history
+'''
+checkable = "`run_id` is unique (dbt test). Each build appends the latest successful run, so the history counts successful runs since it began, not every pipeline run."
+
+[[question]]
+id = "q10"
+question = "How many pulses were first seen in the last 7 days, according to this week's brief input?"
+marts = ["brief_input"]
+kind = "single"
+difficulty = "easy"
+ordered = false
+sql = '''
+select jsonb_array_length(emerging_pulses_7d)
+from marts.brief_input
+'''
+checkable = "`brief_input` is one row. `emerging_pulses_7d` lists every pulse first seen in the 7 days before the build and falls back to an empty array, never NULL, so the answer is weak in a week with none. Pulses OTX created this week are a different date."
+
+[[question]]
+id = "q11"
+question = "Which pulse has the most indicators? Give its name, author and indicator count."
+marts = ["mart_top_pulses"]
+kind = "single"
+difficulty = "easy"
+ordered = true
+sql = '''
+select name, author_name, indicator_count
+from marts.mart_top_pulses
+order by indicator_count desc, id
+limit 1
+'''
+checkable = "One row per pulse (`id` is unique, dbt test). The SQL breaks a tie at the top by id."
+
+[[question]]
+id = "q12"
+question = "How many indicators fall in each freshness bucket, across all types?"
+marts = ["mart_indicator_freshness"]
+kind = "single"
+difficulty = "medium"
+ordered = false
+sql = '''
+select freshness_bucket, sum(indicator_count) as indicator_count
+from marts.mart_indicator_freshness
+group by freshness_bucket
+'''
+checkable = "At most four rows, compared as a set. `mart_indicator_freshness.sql` puts every indicator in exactly one of four fixed buckets, by its expiration only. `mart_indicator_types`' active and expired counts also count drop-out, so they answer a different question."
+
+[[question]]
+id = "q13"
+question = "Which indicator type has the most indicators expiring in the next 30 days? Break ties alphabetically."
+marts = ["mart_indicator_freshness"]
+kind = "single"
+difficulty = "medium"
+ordered = true
+sql = '''
+select type, indicator_count
+from marts.mart_indicator_freshness
+where freshness_bucket = 'expiring_le_30d'
+order by indicator_count desc, type
+limit 1
+'''
+checkable = "(type, freshness_bucket) is unique (dbt test). The bucket's own definition is the question's: not yet expired, and expiring within 30 days of the build. The answer is weak if the bucket is empty."
+
+[[question]]
+id = "q14"
+question = "How many pulses have no active indicators? Pulses with no indicators at all count too."
+marts = ["mart_top_pulses"]
+kind = "single"
+difficulty = "medium"
+ordered = false
+sql = '''
+select count(*)
+from marts.mart_top_pulses
+where active_indicator_count = 0
+'''
+checkable = "One integer. A pulse with no indicators has an active count of 0 through the mart's left join, and the question counts those, so adding `indicator_count > 0` fails."
+
+[[question]]
+id = "q15"
+question = "Which author has published the most pulses, and how many? Break ties alphabetically."
+marts = ["mart_top_pulses"]
+kind = "single"
+difficulty = "medium"
+ordered = true
+sql = '''
+select author_name, count(*) as pulses
+from marts.mart_top_pulses
+group by author_name
+order by pulses desc, author_name
+limit 1
+'''
+checkable = "The mart has one row per pulse, so `count(*)` per author is exact. The tiebreak is named."
+
+[[question]]
+id = "q16"
+question = "For each month of 2025 that had pulses created, how many were created? Oldest month first."
+marts = ["mart_pulse_trends_monthly"]
+kind = "single"
+difficulty = "medium"
+ordered = true
+sql = '''
+select month, pulse_count
+from marts.mart_pulse_trends_monthly
+where month >= date '2025-01-01' and month < date '2026-01-01'
+order by month
+'''
+checkable = "At most 12 rows, in month order. A month with no pulses has no row, and the question asks only for months that had pulses, so zero-filled months fail."
+
+[[question]]
+id = "q17"
+question = "How many pulses are there at each TLP level?"
+marts = ["mart_data_quality"]
+kind = "single"
+difficulty = "medium"
+ordered = false
+sql = '''
+select d.key as tlp, d.value::bigint as pulse_count
+from marts.mart_data_quality q
+cross join lateral jsonb_each_text(q.tlp_distribution) as d(key, value)
+'''
+checkable = "`tlp_distribution` maps each TLP value to its pulse count; the rows are compared as a set. It is the marts' only per-TLP pulse count: `mart_top_pulses` has no `tlp` column, and `brief_input` covers only the week's pulses."
+
+[[question]]
+id = "q18"
+question = "Which five KEV-listed CVEs in the corpus have the highest EPSS scores? Give the CVE id, the EPSS score and the KEV vendor; break ties by CVE id."
+marts = ["mart_cve_enrichment"]
+kind = "single"
+difficulty = "medium"
+ordered = true
+sql = '''
+select cve_id, epss, kev_vendor_project
+from marts.mart_cve_enrichment
+where in_kev and epss is not null
+order by epss desc, cve_id
+limit 5
+'''
+checkable = "`cve_id` is unique (dbt test). A CVE with no EPSS score has a NULL `epss`, not a score of 0, so the SQL leaves it out; `order by epss desc` alone would put the NULLs first in Postgres. The tiebreak is named."
+
+[[question]]
+id = "q19"
+question = "How many of the corpus's CVE ids does KEV mark as used in ransomware campaigns?"
+marts = ["mart_cve_enrichment"]
+kind = "single"
+difficulty = "medium"
+ordered = false
+sql = '''
+select count(*)
+from marts.mart_cve_enrichment
+where kev_known_ransomware
+'''
+checkable = "One integer. `kev_known_ransomware` is true only when KEV's ransomware field is `Known` (`stg_cisa__kev_vulnerabilities.sql`), and false for `Unknown` or no KEV entry."
+
+[[question]]
+id = "q20"
+question = "By how many percentage points did the active-indicator percentage change from the earliest to the latest run in the data-quality history?"
+marts = ["mart_data_quality_history"]
+kind = "single"
+difficulty = "medium"
+ordered = false
+tolerance = 0.01
+sql = '''
+select
+    (select pct_active from marts.mart_data_quality_history order by started_at desc limit 1)
+  - (select pct_active from marts.mart_data_quality_history order by started_at asc limit 1)
+    as change_points
+'''
+checkable = "One number, latest minus earliest. Run ids are a sequence that grows with time, so ordering by `run_id` picks the same two rows. It is 0 when the history has one row."
+
+[[question]]
+id = "q21"
+question = "How many tags appear on exactly one pulse?"
+marts = ["mart_threat_tags"]
+kind = "single"
+difficulty = "medium"
+ordered = false
+sql = '''
+select count(*)
+from marts.mart_threat_tags
+where pulse_count = 1
+'''
+checkable = "One integer; `int_pulse_tag` takes each tag exactly as OTX sent it."
+
+[[question]]
+id = "q22"
+question = "For each indicator type with at least 1,000 indicators, what percentage of its indicators has no expiration date? Round to one decimal."
+marts = ["mart_indicator_types", "mart_indicator_freshness"]
+kind = "join"
+difficulty = "hard"
+ordered = false
+tolerance = 0.05
+sql = '''
+select t.type,
+       round(100.0 * coalesce(f.indicator_count, 0) / t.indicator_count, 1) as pct_no_expiration
+from marts.mart_indicator_types t
+left join marts.mart_indicator_freshness f
+       on f.type = t.type and f.freshness_bucket = 'no_expiration'
+where t.indicator_count >= 1000
+'''
+checkable = "Compared as a set. Both marts count every indicator row per type, so either mart's total works. The left join keeps a type with no `no_expiration` row, at 0.0, which an inner join drops; the 0.05 tolerance covers rounding."
+
+[[question]]
+id = "q23"
+question = "For each of the brief input's five top indicator types (corpus-wide), how many of its indicators are active? Keep the brief's order."
+marts = ["brief_input", "mart_indicator_types"]
+kind = "join"
+difficulty = "hard"
+ordered = true
+sql = '''
+select e.elem->>'type' as type, t.active_count
+from marts.brief_input b
+cross join lateral jsonb_array_elements(b.top_types) with ordinality as e(elem, ord)
+join marts.mart_indicator_types t on t.type = e.elem->>'type'
+order by e.ord
+'''
+checkable = "`top_types` is the five largest types of `mart_indicator_types`, in count order (`brief_input.sql`). The join is exact, and the order is the array's. The top five of `mart_indicator_types` by count gives the same rows in the same order, so that route passes too, ties aside."
+
+[[question]]
+id = "q24"
+question = "In the month with the most pulses created (the latest month, if months tie), which pulse created that month has the most indicators? Give its id, name and indicator count; break ties by id."
+marts = ["mart_pulse_trends_monthly", "mart_top_pulses"]
+kind = "join"
+difficulty = "hard"
+ordered = true
+sql = '''
+with top_month as (
+    select month
+    from marts.mart_pulse_trends_monthly
+    order by pulse_count desc, month desc
+    limit 1
+)
+select p.id, p.name, p.indicator_count
+from marts.mart_top_pulses p
+join top_month m on date_trunc('month', p.created)::date = m.month
+order by p.indicator_count desc, p.id
+limit 1
+'''
+checkable = "Both marts take the month from the same `created` column of the pulses staging model, so the join is exact. Both tiebreaks are named."
+
+[[question]]
+id = "q25"
+question = "By how many indicators did the corpus total change between the previous run and the latest run in the data-quality history?"
+marts = ["mart_data_quality_history"]
+kind = "single"
+difficulty = "hard"
+ordered = false
+sql = '''
+select total_indicators - lag(total_indicators) over (order by started_at) as change
+from marts.mart_data_quality_history
+order by started_at desc
+limit 1
+'''
+checkable = "One value from a window over the history, ordered by `started_at`. It is NULL when the history has one row, and the result match counts NULL equal to NULL; the answer is weak then."
+
+[[question]]
+id = "q26"
+question = "What percentage of the corpus's CVE ids have an EPSS score? Round to one decimal."
+marts = ["mart_cve_enrichment"]
+kind = "single"
+difficulty = "hard"
+ordered = false
+tolerance = 0.05
+sql = '''
+select round(100.0 * count(*) filter (where epss is not null) / nullif(count(*), 0), 1) as pct_scored
+from marts.mart_cve_enrichment
+'''
+checkable = "One number. It equals `round(100.0 * cve_ids_with_epss / cve_ids, 1)` from `mart_data_quality`, so either route passes; the 0.05 tolerance covers rounding."
+
+[[question]]
+id = "q27"
+question = "Of the pulses first seen in the last 7 days (per this week's brief input), which three have the most active indicators? Give each one's id, name and active indicator count; break ties by id."
+marts = ["brief_input", "mart_top_pulses"]
+kind = "join"
+difficulty = "hard"
+ordered = true
+sql = '''
+select p.id, p.name, p.active_indicator_count
+from marts.brief_input b
+cross join lateral jsonb_array_elements(b.emerging_pulses_7d) as e(elem)
+join marts.mart_top_pulses p on p.id = e.elem->>'id'
+order by p.active_indicator_count desc, p.id
+limit 3
+'''
+checkable = "Every emerging pulse has a `mart_top_pulses` row, because `brief_input` builds the list by joining that mart. Ids are unique and the tiebreak is named. The answer is weak in a week with no emerging pulses."
+
+[[question]]
+id = "q28"
+question = "Of this week's CVEs, how many are in KEV, and how many have an EPSS score at or above the brief's threshold but are not in KEV?"
+marts = ["brief_input"]
+kind = "single"
+difficulty = "hard"
+ordered = false
+sql = '''
+select (cve_exploitation_7d->>'in_kev')::bigint               as in_kev,
+       (cve_exploitation_7d->>'epss_high_not_in_kev')::bigint as epss_high_not_in_kev
+from marts.brief_input
+'''
+checkable = "The CVE block counts this week's CVEs (`seen_7d`) from `mart_cve_enrichment`, with the EPSS threshold 0.1 (`brief_input.sql`). The same counts computed from `mart_cve_enrichment` pass while both feeds have a snapshot. Before a feed's first fetch the block holds NULL where a computed count gives 0."
+
+[[question]]
+id = "q29"
+question = "Among the brief input's top-5 countries list (corpus-wide, by pulses), which has the most active indicators, and how many? Break ties alphabetically."
+marts = ["brief_input", "mart_targeted_countries"]
+kind = "join"
+difficulty = "hard"
+ordered = true
+sql = '''
+select c.country, c.active_indicator_count
+from marts.brief_input b
+cross join lateral jsonb_array_elements(b.top_countries) as e(elem)
+join marts.mart_targeted_countries c on c.country = e.elem->>'country'
+order by c.active_indicator_count desc, c.country
+limit 1
+'''
+checkable = "`top_countries` is the five countries with the most pulses, taken from `mart_targeted_countries`, whose `country` is unique (dbt test). The counts are exact integers and the tiebreak is named."
+
+[[question]]
+id = "q30"
+question = "For IPv4 indicators, how many are in each of the four freshness buckets? Show all four buckets, with 0 where there are none."
+marts = ["mart_indicator_freshness"]
+kind = "single"
+difficulty = "hard"
+ordered = false
+sql = '''
+select b.bucket as freshness_bucket, coalesce(f.indicator_count, 0) as indicator_count
+from (values ('no_expiration'), ('expired'), ('expiring_le_30d'), ('active_gt_30d')) as b(bucket)
+left join marts.mart_indicator_freshness f
+       on f.freshness_bucket = b.bucket and f.type = 'IPv4'
+'''
+checkable = "Exactly four rows, compared as a set. `IPv4` is one of the indicator types the staging model's `accepted_values` test lists, and the zero rows are explicit, so returning only the buckets that have indicators fails."
