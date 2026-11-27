@@ -58,7 +58,13 @@ class SessionRefused(Exception):
 
 
 class QueryFailed(Exception):
-    """Postgres refused or cancelled the query."""
+    """Postgres refused or cancelled the query, or psycopg's read of it failed.
+
+    ``sqlstate`` is the server's code, or None when there is none: for a value
+    psycopg can't load (such as an infinity date), or a connection that dropped
+    during the query. A session an administrator ended during the query gives
+    the server's 57P01.
+    """
 
     def __init__(self, sqlstate: str | None, message: str) -> None:
         super().__init__(f"{sqlstate}: {message}")

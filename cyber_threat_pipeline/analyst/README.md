@@ -99,38 +99,45 @@ explanation or judge) scores 100%.
   model replied `CANNOT_ANSWER`, or the query failed, a connection lost during
   it included.
 - `analyst-eval`: `0` once the run completes, whatever the accuracy.
-- `analyst-check`: `0` every check passed · `1` one failed (each is printed).
-- All three: `2` a setup error (a missing setting or key, no connection, an
-  unreadable gold file or a gold query the guard refuses, a session that isn't
-  `analyst_ro`'s, or a database error outside a checked query, such as a lost
-  connection), printed as one `setup error:` line with no traceback. Through
-  `make`, a non-zero exit makes `make` itself exit 2.
+- `analyst-check`: `0` every check passed · `1` one failed (each is printed),
+  a gold query the guard refuses included.
+- All three: `2` a setup error, printed as one `setup error:` line with no
+  traceback: a missing setting or key, no connection, an unreadable gold file
+  (eval and check), a session that isn't `analyst_ro`'s, or a database error
+  outside a checked query, such as a lost connection. In the eval, a gold query
+  the guard refuses is a setup error too, once the model's query for that
+  question passes the guard. Through `make`, a non-zero exit makes `make`
+  itself exit 2.
 
-What a database failure prints depends on where it happens:
+What a database failure prints follows these rules; each quoted line is an
+example, not the full list:
 
-- A URL libpq can't parse gets a fixed line that never quotes it (libpq's own
-  message quotes the token it can't read, which can be the password).
-- A well-formed URL that fails to connect prints the connect error's first
-  line: libpq's, which names the host and port (and the user, for a refused
-  login), or psycopg's `failed to resolve host '…'`, which names the host, when
-  the name doesn't resolve. Neither names the password as long as its special
-  characters are percent-encoded: an unencoded `@` ends the password early,
-  and the rest of it is printed as part of the host.
-- A query error the connection survives prints the server's message, or
-  psycopg's for a value it can't load (such as an infinity date): after
-  `Query error:` in `ask`, as that question's reason in the eval's report, and
-  in that query's failure line in the check.
-- A connection broken during a query: `ask` prints the error's first line
-  after `Query error: None:` (such as `consuming input failed: server closed
-  the connection unexpectedly`) and exits 1. `check` and the eval stop at
-  their next statement with the one fixed `setup error:` line below and exit 2,
-  with no failure lines and no report. A break during the eval's last
-  statement, its closing read of `brief_input.generated_at`, is the
-  exception: the run ends as usual, its report records no end time and warns
-  that a dbt build ran, and the check doesn't notice it.
-- Any other database error, outside a checked query, prints its SQLSTATE and
-  the server's message, or one fixed line when it has no SQLSTATE, as for a
-  lost connection.
+- **A URL libpq can't parse:** one fixed line, `cannot connect: <variable> is
+  not a valid connection URL …`, that never quotes the URL (libpq's own message
+  quotes the token it can't read, which can be the password).
+- **A connect that fails:** `cannot connect:` and the connect error's first
+  line, as libpq or psycopg wrote it: such as libpq's `connection to server at
+  "<host>", port <port> failed: …` (with the user, for a refused login),
+  psycopg's `failed to resolve host '<host>': …` when the name doesn't resolve,
+  or psycopg's `connection timeout expired`, which names neither. None of these
+  names the password as long as its special characters are percent-encoded: an
+  unencoded `@` ends the password early, and the rest of it is printed as part
+  of the host.
+- **A query error the connection survives:** its SQLSTATE (`None` when it has
+  none) and message, after `Query error:` in `ask`, as that question's reason
+  in the eval's report, and in that query's failure line in the check: such as
+  the server's `22012: division by zero`, or psycopg's `None: date too large
+  (after year 10K)` for a value it can't load (an infinity date). A timeout
+  reads `cancelled after 5s` in `ask` and the eval instead.
+- **A connection broken during a query:** `ask` prints it as a query error and
+  exits 1, such as `None: consuming input failed: …` when the connection drops,
+  or `57P01: terminating connection due to administrator command` when an
+  administrator ends the session. `check` and the eval print the one fixed line
+  below and exit 2, with no failure lines and no report.
+- **Any other database error, outside a checked query:** its SQLSTATE and the
+  server's message, such as `database error: 42704: role "analyst_ro" does not
+  exist`, or, when it has no SQLSTATE, one fixed line that never quotes
+  libpq's text: `database error: <type>: the connection failed or was lost`.
 
 ## Files
 

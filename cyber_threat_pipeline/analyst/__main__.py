@@ -24,32 +24,37 @@ WARNING.
 Exit codes: ``ask`` 0 when an answer is printed, 1 on a refusal, a
 CANNOT_ANSWER or a query error, a connection lost during the query included;
 ``eval`` 0 once the run completes, whatever the accuracy; ``check`` 0 when every
-check passes, 1 when one fails. All three exit 2 on a setup error (a missing
-setting or key, no connection, an unreadable gold file or a gold query the guard
-refuses, a session that isn't analyst_ro's, or a database error outside a
-checked query, such as a lost connection), printed as one ``setup error:``
-line. What a database failure prints depends on where it happens:
+check passes, 1 when one fails, a gold query the guard refuses included. All
+three exit 2 on a setup error, printed as one ``setup error:`` line: a missing
+setting or key, no connection, an unreadable gold file (eval and check), a
+session that isn't analyst_ro's, or a database error outside a checked query,
+such as a lost connection. In the eval, a gold query the guard refuses is a
+setup error too, once the model's query for that question passes the guard.
+
+What a database failure prints follows these rules; each quoted line is an
+example, not the full list:
 
 - a URL libpq can't parse: a fixed line that never quotes it, since libpq's parse
-  error quotes the token it can't read, which can be the password;
-- a well-formed URL that fails to connect: the connect error's first line
-  (``_connect``), libpq's, which names the host and port (and the user, for a
-  refused login), or psycopg's ``failed to resolve host '...'``, which names the
-  host, when the name doesn't resolve. Neither names the password as long as
+  error quotes the token it can't read, which can be the password (``_connect``);
+- a connect that fails: the connect error's first line, as libpq or psycopg
+  wrote it (``_connect``), such as libpq's ``connection to server at "<host>",
+  port <port> failed: ...`` (with the user, for a refused login), psycopg's
+  ``failed to resolve host '<host>': ...`` or psycopg's ``connection timeout
+  expired``, which names neither. None of these names the password as long as
   its special characters are percent-encoded: an unencoded ``@`` ends the
   password early, and the rest of it is printed as part of the host;
-- a query error the connection survives: the server's message, or psycopg's for
-  a value it can't load, such as an infinity date (``runner._message``). ``ask``
-  prints it after ``Query error:``, the eval records it as that question's
-  reason, and the check prints it in that query's failure line;
-- a connection broken during a query: ``ask`` prints the error's first line
-  after ``Query error: None:`` and exits 1. ``check`` and the eval stop at their
-  next statement, the next ``BEGIN``, with ``_database_error``'s fixed line and
-  exit 2, with no failure lines and no report. A break during the eval's last
-  statement, its closing read of ``brief_input.generated_at``
-  (``evaluate._generated_at``), is the exception: the run ends as usual, its
-  report records no end time and warns that a dbt build ran, and the check
-  doesn't notice it;
+- a query error the connection survives: its SQLSTATE (``None`` when it has
+  none) and message (``runner._message``), such as the server's ``22012:
+  division by zero`` or psycopg's ``None: date too large (after year 10K)`` for
+  a value it can't load. ``ask`` prints it after ``Query error:``, the eval
+  records it as that question's reason, and the check prints it in that query's
+  failure line; a timeout reads ``cancelled after 5s`` in ``ask`` and the eval
+  instead;
+- a connection broken during a query: ``ask`` prints it as a query error and
+  exits 1, such as ``None: consuming input failed: ...`` when the connection
+  drops or ``57P01: terminating connection due to administrator command`` when
+  an administrator ends the session. ``check`` and the eval exit 2 with
+  ``_database_error``'s fixed line, with no failure lines and no report;
 - any other database error that reaches ``main``: its SQLSTATE and the server's
   message, or one fixed line when it has no SQLSTATE, as for a lost connection
   (``_database_error``).
@@ -118,10 +123,10 @@ def _database_error(error: psycopg.Error) -> str:
     """One line for a database error that reaches ``main``, outside a checked query.
 
     That includes a connection that broke during one of ``check``'s or the eval's
-    queries, other than the eval's last: it raises at their next statement. A
-    server error gives its SQLSTATE and the server's message; an error with no
-    SQLSTATE, as for a lost connection, gives one fixed line instead of libpq's
-    text.
+    queries: the next statement on it raises, or ``evaluate._generated_at`` does
+    when its own read broke. A server error gives its SQLSTATE and the server's
+    message; an error with no SQLSTATE, as for a lost connection, gives one fixed
+    line instead of libpq's text.
     """
     if error.sqlstate:
         # A server error: its message is the server's, never the connection string.
