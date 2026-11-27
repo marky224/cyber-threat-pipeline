@@ -99,9 +99,22 @@ explanation or judge) scores 100%.
 - All three: `2` a setup error (a missing setting or key, no connection, an
   unreadable gold file or a gold query the guard refuses, a session that isn't
   `analyst_ro`'s, or a database error such as a lost connection), printed as
-  one `setup error:` line with no traceback. libpq's text for a failed or lost
-  connection isn't printed, since it can quote the URL. Through `make`, a
-  non-zero exit makes `make` itself exit 2.
+  one `setup error:` line with no traceback. Through `make`, a non-zero exit
+  makes `make` itself exit 2.
+
+What a database failure prints depends on where it happens:
+
+- A URL libpq can't parse gets a fixed line that never quotes it (libpq's own
+  message quotes the token it can't read, which can be the password).
+- A well-formed URL that fails to connect prints libpq's first line, which names
+  the host and port (and the user, for a refused login), not the password.
+- A query error prints the server's message, or libpq's first line if the
+  connection broke during the query: after `Query error:` in `ask`, as that
+  question's reason in the eval's report, and in that query's failure line in
+  the check.
+- Any other database error, outside a query, prints its SQLSTATE and the
+  server's message, or one fixed line when it has no SQLSTATE, as for a lost
+  connection.
 
 ## Files
 

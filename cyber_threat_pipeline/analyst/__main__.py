@@ -27,8 +27,21 @@ accuracy; ``check`` 0 when every check passes, 1 when one fails. All three exit
 2 on a setup error (a missing setting or key, no connection, an unreadable gold
 file or a gold query the guard refuses, a session that isn't analyst_ro's, or a
 database error outside a checked query, such as a lost connection), printed as
-one ``setup error:`` line. A server error's own message is printed; libpq's text
-for a failed or lost connection isn't, since it can quote the connection string.
+one ``setup error:`` line. What a database failure prints depends on where it
+happens:
+
+- a URL libpq can't parse: a fixed line that never quotes it, since libpq's parse
+  error quotes the token it can't read, which can be the password;
+- a well-formed URL that fails to connect: libpq's first line (``_connect``),
+  which names the host and port (and the user, for a refused login), not the
+  password;
+- a query error: the server's message, or libpq's first line when the
+  connection broke during the query (``runner._message``). ``ask`` prints it
+  after ``Query error:``, the eval records it as that question's reason, and the
+  check prints it in that query's failure line;
+- any other database error that reaches ``main``: its SQLSTATE and the server's
+  message, or one fixed line when it has no SQLSTATE, as for a lost connection
+  (``_database_error``).
 """
 
 from __future__ import annotations
@@ -91,7 +104,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _database_error(error: psycopg.Error) -> str:
-    """One line for a database error, without libpq's text for a failed connection."""
+    """One line for a database error that reaches ``main``, outside a checked query.
+
+    A server error gives its SQLSTATE and the server's message; an error with no
+    SQLSTATE, as for a lost connection, gives one fixed line instead of libpq's text.
+    """
     if error.sqlstate:
         # A server error: its message is the server's, never the connection string.
         lines = (error.diag.message_primary or str(error)).splitlines()
