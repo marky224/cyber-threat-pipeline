@@ -681,23 +681,40 @@ def test_fetch_rows_only_is_accepted_and_capped() -> None:
         # Postgres cuts '1.5' at the field (1 hour); the rendering's '1.5 HOUR' is 1:30.
         pytest.param(
             "select interval '1.5' hour",
-            "rendering changes an interval literal: '1.5'",
+            "rendering changes an interval literal: '1.5' hour",
             id="interval-fraction-hour",
         ),
         pytest.param(
             "select interval '0.5' day",
-            "rendering changes an interval literal: '0.5'",
+            "rendering changes an interval literal: '0.5' day",
             id="interval-fraction-day",
         ),
         pytest.param(
             "select interval '1.5' month",
-            "rendering changes an interval literal: '1.5'",
+            "rendering changes an interval literal: '1.5' month",
             id="interval-fraction-month",
         ),
         pytest.param(
             "select interval '-1.5' hour",
-            "rendering changes an interval literal: '-1.5'",
+            "rendering changes an interval literal: '-1.5' hour",
             id="interval-negative-fraction-hour",
+        ),
+        # Postgres reads the field word as a limit and drops the smaller units (0 here);
+        # the rendering writes it as a column alias and keeps them (36 hours).
+        pytest.param(
+            "select interval '36 hours' day",
+            "rendering changes an interval literal: '36 hours' day",
+            id="interval-units-then-day",
+        ),
+        pytest.param(
+            "select interval '2 hours 30 minutes' hour",
+            "rendering changes an interval literal: '2 hours 30 minutes' hour",
+            id="interval-units-then-hour",
+        ),
+        pytest.param(
+            "select now() - interval '1 day 12 hours' day",
+            "rendering changes an interval literal: '1 day 12 hours' day",
+            id="interval-units-then-day-in-arithmetic",
         ),
     ],
 )

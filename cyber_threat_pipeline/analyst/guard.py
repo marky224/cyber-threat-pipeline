@@ -43,9 +43,13 @@ The rules, in order:
    and of the rendering, and refuses the query unless they match: interval
    text ignoring case and whitespace, as Postgres reads it, and to_char formats
    exactly, since their patterns are case-sensitive. A field word after an
-   interval string (``interval '1' day``) is read as part of it only when the
-   string is a whole number: Postgres cuts ``interval '1.5' hour`` to 1 hour,
-   while the rendering's ``'1.5 HOUR'`` is 1:30. A to_char format must be one
+   interval string is read as part of it when the string is a whole number
+   (``interval '1' day`` is ``1 day``, as the rendering writes it). After any
+   other string the query is refused: Postgres reads the word as a field limit
+   and drops the smaller units (``interval '1.5' hour`` is 1 hour,
+   ``interval '36 hours' day`` is 0), while the rendering keeps them, either
+   inside the string (``'1.5 HOUR'`` is 1:30) or with the word written as a
+   column alias (``INTERVAL '36 HOURS' AS day``). A to_char format must be one
    plain string literal, checked on the tree: sqlglot converts strings nested
    anywhere in that argument (``('%Y')``, ``'%Y'::text``, ``coalesce('%Y', ...)``),
    where the tokens can't show it.
@@ -501,13 +505,14 @@ def _literals(sql: str) -> list[tuple[str, str]]:
             and (following[0].token_type is TokenType.STRING)
         ):
             value = following[0].text
-            # interval '1' day: the field word belongs to a whole-number literal.
-            if (
-                _SIGNED_INTEGER.fullmatch(value)
-                and len(following) > 1
-                and following[1].text.lower() in _INTERVAL_FIELDS
-            ):
-                value += " " + following[1].text
+            if len(following) > 1 and following[1].text.lower() in _INTERVAL_FIELDS:
+                field = following[1].text
+                # interval '1' day: the field word belongs to a whole-number literal.
+                # After any other string Postgres reads it as a field limit, which
+                # the rendering drops (rule 9 in the module docstring).
+                if not _SIGNED_INTEGER.fullmatch(value):
+                    raise _Refused(f"rendering changes an interval literal: {value!r} {field}")
+                value += " " + field
             found.append(("an interval literal", " ".join(value.lower().split())))
         elif (
             token.text.lower() == "to_char"
