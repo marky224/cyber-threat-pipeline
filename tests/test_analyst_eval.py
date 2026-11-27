@@ -1,9 +1,9 @@
 """cyber_threat_pipeline.analyst.evaluate: the eval loop, its totals and its reports.
 
 The loop runs against Postgres as a test login in analyst_ro (DB-integration,
-gated on NEON_DATABASE_URL; the login is dropped when the module ends). Test
-doubles, as the plan names them: a 2-question gold file whose queries read no
-mart (the test database has none), a gold-echo provider and a wrong-SQL
+gated on NEON_DATABASE_URL; the login is dropped when the module ends). Its test
+doubles: a 2-question gold file whose queries read no mart (the test database
+has none) and one gold question over the row cap, a gold-echo provider and a wrong-SQL
 provider, and an Anthropic fake returning a real ``anthropic.types.Message``
 with ``Usage`` for ``judge_answer``. Every double checks that no transaction is
 open when it is called. The report tests build an ``EvalRun`` directly and need
