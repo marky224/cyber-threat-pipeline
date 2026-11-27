@@ -168,6 +168,11 @@ def _generated_at(conn: psycopg.Connection[tuple[Any, ...]]) -> str | None:
     try:
         result = runner.run(conn, "select generated_at from marts.brief_input")
     except runner.QueryFailed:
+        if conn.closed:
+            # A broken connection ends the run, as at any other read (B6).
+            raise psycopg.OperationalError(
+                "the connection broke at brief_input.generated_at"
+            ) from None
         return None
     return str(result.rows[0][0]) if result.rows else None
 

@@ -8,12 +8,18 @@ provider, and an Anthropic fake returning a real ``anthropic.types.Message``
 with ``Usage`` for ``judge_answer``. Every double checks that no transaction is
 open when it is called. The report tests build an ``EvalRun`` directly and need
 no database.
+
+Two more doubles break the eval's connection just before its closing
+``brief_input.generated_at`` read: the socket shut from the client, and the
+session ended by the server (``pg_terminate_backend`` from the owner session).
 """
 
 from __future__ import annotations
 
 import dataclasses
 import json
+import os
+import socket
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -28,6 +34,7 @@ from psycopg.pq import TransactionStatus
 
 from cyber_threat_pipeline.analysis import judge
 from cyber_threat_pipeline.analysis.completion import Completion
+from cyber_threat_pipeline.analyst import __main__ as cli
 from cyber_threat_pipeline.analyst import check, evaluate, prices, runner
 from cyber_threat_pipeline.core.config import Settings
 from tests.conftest import check_create_kwargs
@@ -313,6 +320,47 @@ def test_brief_input_s_generated_at_is_none_when_unreadable(
     # The test database has no marts.brief_input.
     result = evaluate.evaluate(conn, gold[:1], provider="gold-echo", write_sql=check.gold_echo)
     assert result.generated_at == (None, None)
+
+
+_GENERATED_AT_SQL = "select generated_at from marts.brief_input"
+
+
+def _break(kind: str, conn: psycopg.Connection[tuple[Any, ...]], owner: psycopg.Connection) -> None:
+    if kind == "dropped":
+        # Shut from the client: the read gets no SQLSTATE.
+        with socket.socket(fileno=os.dup(conn.pgconn.socket)) as sock:
+            sock.shutdown(socket.SHUT_RDWR)
+    else:
+        # Ended by the server: the read gets 57P01.
+        owner.execute("select pg_terminate_backend(%s, 5000)", (conn.info.backend_pid,))
+
+
+@pytest.mark.parametrize("kind", ["dropped", "ended by the server"])
+def test_a_connection_broken_at_the_closing_generated_at_read_ends_the_run(
+    conn: psycopg.Connection[tuple[Any, ...]],
+    gold: list[evaluate.GoldQuestion],
+    _pg_session: psycopg.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+) -> None:
+    # The run's last read. A broken connection there ends the run as one setup-error
+    # line, as at any other read (B6), instead of completing it with no end value.
+    real_read = runner._read
+    reads: list[str] = []
+
+    def read(c: psycopg.Connection[tuple[Any, ...]], sql: str, cap: int) -> runner.Result:
+        reads.append(sql)
+        if reads.count(_GENERATED_AT_SQL) == 2:
+            _break(kind, c, _pg_session)
+        return real_read(c, sql, cap)
+
+    monkeypatch.setattr(runner, "_read", read)
+    with pytest.raises(psycopg.Error) as raised:
+        evaluate.evaluate(conn, gold[:1], provider="gold-echo", write_sql=check.gold_echo)
+    assert reads.count(_GENERATED_AT_SQL) == 2 and reads[-1] == _GENERATED_AT_SQL
+    assert cli._database_error(raised.value) == (
+        "database error: OperationalError: the connection failed or was lost"
+    )
 
 
 # --- reports (no database) ------------------------------------------------------------
