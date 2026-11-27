@@ -4,8 +4,9 @@ CI's dbt job runs it, and so does local proof on a throwaway postgres:15. It
 connects with ``NEON_DATABASE_URL`` from the environment, the owner of that
 database (``Settings`` isn't built, so ``OTX_API_KEY`` isn't needed), and checks:
 
-1. ``analyst_ro`` can SELECT exactly the 11 marts and nothing else in
-   ``marts``, and has no USAGE on ``raw``, ``pipeline`` or ``dbt_test__audit``;
+1. ``analyst_ro`` can SELECT exactly the 11 marts, each as a whole table, and
+   no column of anything else in ``marts``, and has no USAGE on ``raw``,
+   ``pipeline`` or ``dbt_test__audit``;
 2. the schema card's columns and types equal ``information_schema.columns``
    for the 11 marts, less the column the card leaves out;
 3. then as ``analyst_ro`` (``SET ROLE``, so the runner's session check passes),
@@ -46,22 +47,25 @@ def run(conn: psycopg.Connection[tuple[Any, ...]], questions: list[GoldQuestion]
 
 
 def _role(conn: psycopg.Connection[tuple[Any, ...]]) -> list[str]:
-    # Readable means SELECT on the table or on any of its columns: has_table_privilege
-    # doesn't see a column-level grant.
+    # A mart is readable only with SELECT on the whole table, since the schema card
+    # offers the model every column. Any other relation in marts must be unreadable
+    # even by one column: has_table_privilege doesn't see a column-level grant.
     rows = conn.execute(
-        "select c.relname, has_any_column_privilege(%s, c.oid, 'select')"
+        "select c.relname, has_table_privilege(%s, c.oid, 'select'),"
+        " has_any_column_privilege(%s, c.oid, 'select')"
         " from pg_class c join pg_namespace n on n.oid = c.relnamespace"
         " where n.nspname = %s and c.relkind in ('r', 'v', 'm', 'p', 'f')",
-        (_ROLE, MART_SCHEMA),
+        (_ROLE, _ROLE, MART_SCHEMA),
         prepare=False,
     ).fetchall()
-    present = {name for name, _ in rows}
-    readable = {name for name, can in rows if can}
+    present = {name for name, _, _ in rows}
+    marts_readable = {name for name, whole, _ in rows if whole and name in MART_NAMES}
+    others_readable = {name for name, _, any_column in rows if any_column} - MART_NAMES
     failures = [f"mart missing from {MART_SCHEMA}: {name}" for name in sorted(MART_NAMES - present)]
-    failures += [f"{_ROLE} can read {MART_SCHEMA}.{name}" for name in sorted(readable - MART_NAMES)]
+    failures += [f"{_ROLE} can read {MART_SCHEMA}.{name}" for name in sorted(others_readable)]
     failures += [
         f"{_ROLE} cannot read {MART_SCHEMA}.{name}"
-        for name in sorted((MART_NAMES & present) - readable)
+        for name in sorted((MART_NAMES & present) - marts_readable)
     ]
     open_schemas = conn.execute(
         "select nspname from pg_namespace"
@@ -70,7 +74,7 @@ def _role(conn: psycopg.Connection[tuple[Any, ...]]) -> list[str]:
         prepare=False,
     ).fetchall()
     failures += [f"{_ROLE} has USAGE on schema {name}" for (name,) in open_schemas]
-    print(f"role: {len(readable & MART_NAMES)} of {len(MART_NAMES)} marts readable by {_ROLE}")
+    print(f"role: {len(marts_readable)} of {len(MART_NAMES)} marts readable by {_ROLE}")
     return failures
 
 

@@ -46,6 +46,23 @@ def test_a_column_grant_outside_the_marts_is_a_failure(
         cur.execute(f"drop table if exists marts.{_PROBE}")
 
 
+def test_a_mart_readable_by_some_columns_only_is_a_failure(
+    _pg_session: psycopg.Connection, conn: psycopg.Connection[tuple[Any, ...]]
+) -> None:
+    # A probe table named like a mart (the test database has no dbt build). The schema
+    # card offers the model every column, so a mart must be readable whole. Plain
+    # `create` fails if a real mart is there, and then nothing is dropped.
+    cur = _pg_session.cursor()
+    cur.execute("create table marts.mart_threat_tags (tag text, pulse_count bigint, x bigint)")
+    try:
+        cur.execute("grant select (tag, pulse_count) on marts.mart_threat_tags to analyst_ro")
+        failures = check._role(conn)
+        assert "analyst_ro cannot read marts.mart_threat_tags" in failures
+        assert "mart missing from marts: mart_threat_tags" not in failures
+    finally:
+        cur.execute("drop table marts.mart_threat_tags")
+
+
 def test_a_gold_text_cut_at_the_row_cap_is_not_read_twice(
     conn: psycopg.Connection[tuple[Any, ...]],
 ) -> None:
