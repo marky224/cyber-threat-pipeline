@@ -97,8 +97,11 @@ explanation or judge) scores 100%.
 - `analyst-eval`: `0` once the run completes, whatever the accuracy.
 - `analyst-check`: `0` every check passed · `1` one failed (each is printed).
 - All three: `2` a setup error (a missing setting or key, no connection, an
-  unreadable gold file, or a session that isn't `analyst_ro`'s). Through
-  `make`, a non-zero exit makes `make` itself exit 2.
+  unreadable gold file or a gold query the guard refuses, a session that isn't
+  `analyst_ro`'s, or a database error such as a lost connection), printed as
+  one `setup error:` line with no traceback. libpq's text for a failed or lost
+  connection isn't printed, since it can quote the URL. Through `make`, a
+  non-zero exit makes `make` itself exit 2.
 
 ## Files
 

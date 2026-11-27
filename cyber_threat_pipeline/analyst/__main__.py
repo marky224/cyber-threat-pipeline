@@ -25,7 +25,10 @@ Exit codes: ``ask`` 0 when an answer is printed, 1 on a refusal, a
 CANNOT_ANSWER or a query error; ``eval`` 0 once the run completes, whatever the
 accuracy; ``check`` 0 when every check passes, 1 when one fails. All three exit
 2 on a setup error (a missing setting or key, no connection, an unreadable gold
-file, or a session that isn't analyst_ro's).
+file or a gold query the guard refuses, a session that isn't analyst_ro's, or a
+database error outside a checked query, such as a lost connection), printed as
+one ``setup error:`` line. A server error's own message is printed; libpq's text
+for a failed or lost connection isn't, since it can quote the connection string.
 """
 
 from __future__ import annotations
@@ -79,9 +82,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "eval":
             return run_eval(args.provider, record=args.record == "1")
         return run_check()
-    except _SetupError as error:
-        print(f"setup error: {_esc(str(error))}", file=sys.stderr)
-        return 2
+    except (_SetupError, evaluate.GoldFileError) as error:
+        message = str(error)
+    except psycopg.Error as error:
+        message = _database_error(error)
+    print(f"setup error: {_esc(message)}", file=sys.stderr)
+    return 2
+
+
+def _database_error(error: psycopg.Error) -> str:
+    """One line for a database error, without libpq's text for a failed connection."""
+    if error.sqlstate:
+        # A server error: its message is the server's, never the connection string.
+        lines = (error.diag.message_primary or str(error)).splitlines()
+        return f"database error: {error.sqlstate}: {lines[0] if lines else type(error).__name__}"
+    return f"database error: {type(error).__name__}: the connection failed or was lost"
 
 
 def ask(question: str) -> int:

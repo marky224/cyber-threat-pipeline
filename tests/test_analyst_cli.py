@@ -18,12 +18,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import psycopg
 import pytest
 from anthropic.types import Message, TextBlock, Usage
 
 from cyber_threat_pipeline.analysis.completion import Completion
 from cyber_threat_pipeline.analyst import __main__ as cli
-from cyber_threat_pipeline.analyst import evaluate, runner
+from cyber_threat_pipeline.analyst import check, evaluate, runner
 from tests.conftest import check_create_kwargs
 
 _REAL_CONNECT = runner.connect
@@ -410,3 +411,47 @@ def test_check_never_prints_libpq_s_message_for_a_malformed_url(
     code, out = _run(capsys, "check")
     assert code == 2
     assert "NEON_DATABASE_URL is not a valid connection URL" in out and "s3cr" not in out
+
+
+def test_a_database_error_in_the_check_is_one_setup_error_line(
+    world: _World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # As on a postgres:15 that never had sql/33 applied.
+    def run(conn: Any, questions: list[Any]) -> list[str]:
+        raise psycopg.errors.UndefinedObject('role "analyst_ro" does not exist')
+
+    monkeypatch.setattr(check, "run", run)
+    code, out = _run(capsys, "check")
+    assert code == 2
+    assert out == 'setup error: database error: 42704: role "analyst_ro" does not exist\n'
+
+
+def test_a_gold_query_refused_mid_eval_is_one_setup_error_line(
+    world: _World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic")
+
+    def refuse(*_args: Any, **_kwargs: Any) -> evaluate.EvalRun:
+        raise evaluate.GoldFileError("q07: the guard refuses the gold query: table not allowed: x")
+
+    monkeypatch.setattr(evaluate, "evaluate", refuse)
+    code, out = _run(capsys, "eval")
+    assert code == 2
+    assert out == "setup error: q07: the guard refuses the gold query: table not allowed: x\n"
+
+
+def test_a_connection_lost_mid_eval_is_one_setup_error_line_without_libpq_s_text(
+    world: _World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic")
+
+    def lose(*_args: Any, **_kwargs: Any) -> evaluate.EvalRun:
+        # libpq's text for a failed or lost connection can quote the connection string.
+        raise psycopg.OperationalError("consuming input failed: host=analyst-host password=pw")
+
+    monkeypatch.setattr(evaluate, "evaluate", lose)
+    code, out = _run(capsys, "eval")
+    assert code == 2
+    assert out == (
+        "setup error: database error: OperationalError: the connection failed or was lost\n"
+    )
